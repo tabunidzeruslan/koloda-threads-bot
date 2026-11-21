@@ -64,7 +64,7 @@ class Gemini:
         if search:
             body["tools"] = [{"google_search": {}}]
         last: Exception | None = None
-        models = self.list_models()[:4]
+        models = self.list_models()[:6 if search else 4]
         if not models:
             raise RuntimeError("Gemini: нет доступных моделей flash для этого ключа")
         for model in models:
@@ -81,8 +81,9 @@ class Gemini:
                     break
                 except net.NetError as e:
                     last = e
-                    if e.status == 429 and attempt == 0:
-                        time.sleep(20)
+                    quota = "quota" in str(e.body).lower()
+                    if e.status == 429 and attempt == 0 and not quota:
+                        time.sleep(15)
                         continue
                     break  # 404/400/5xx -> next model
                 except (KeyError, IndexError) as e:

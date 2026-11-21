@@ -49,3 +49,23 @@ class WriterTests(unittest.TestCase):
         p = writer.build_prompt(today=date(2026, 11, 22), rubrics=["Дуб чи граб"], sell=False, recent=[])
         self.assertIn("22 листопада 2026", p)
         self.assertIn("осінь", p)
+
+
+class NoSearchGM(FakeGM):
+    def generate(self, prompt, system="", json_mode=False, search=False, temperature=0.9):
+        if search:
+            raise RuntimeError("HTTP 429 quota")
+        if system == writer.FACTCHECK_NOSEARCH:
+            return json.dumps({"ok": True})
+        return super().generate(prompt, system, json_mode, search, temperature)
+
+
+class NoSearchTests(unittest.TestCase):
+    def test_fallback_without_search(self):
+        post = writer.write_post(NoSearchGM(), today=date(2026, 11, 22), sell=False, recent=[], last_rubrics=[],
+                                 rnd=random.Random(0), log=lambda *a: None)
+        self.assertEqual(post["fact"], "nosearch")
+
+
+if __name__ == "__main__":
+    unittest.main()

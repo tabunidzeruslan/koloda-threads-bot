@@ -149,7 +149,7 @@ class Bot:
         if chat.get("type") != "private":
             return
         if not self.owner:
-            if text.startswith("/start"):
+            if text.lower().lstrip("/").startswith("start") or text.lower() in ("привет", "привіт"):
                 self.s["owner_chat_id"] = chat["id"]
                 self.say("Готово, теперь бот пишет вам.\n\n" + HELP)
             return
@@ -291,7 +291,7 @@ class Bot:
         d = sl["draft"]
         sl["v"] = sl.get("v", 0) + 1
         fact = {"ok": "факты ✅", "fixed": "факты исправлены ✅", "unchecked": "факты НЕ проверены ⚠️",
-                "owner": "ваш текст"}.get(d.get("fact"), "")
+                "nosearch": "факты проверены без поиска ⚠️", "owner": "ваш текст"}.get(d.get("fact"), "")
         head = note or (f"📝 Черновик на {hhmm(sl['at'])}" + (" · продающий" if sl["kind"] == "sell" else "")
                         + f" · {d.get('rubric', '')} · оценка {d.get('score')}/10 · {fact}")
         if d.get("fact_note") and d.get("fact") != "ok":
@@ -418,7 +418,8 @@ class Bot:
             sell = i == n - 1 and n >= 3
             post = self.write(sell)
             if post:
-                fact = {"ok": "факты ✅", "fixed": "факты исправлены ✅", "unchecked": "факты НЕ проверены ⚠️"}[post["fact"]]
+                fact = {"ok": "факты ✅", "fixed": "факты исправлены ✅", "unchecked": "факты НЕ проверены ⚠️",
+                        "nosearch": "факты проверены без поиска ⚠️"}.get(post["fact"], "")
                 self.say(f"Пробный {i + 1}/{n}{' · продающий' if sell else ''} · {post['rubric']} · оценка {post['score']}/10 · {fact}\n\n{post['text']}")
             else:
                 self.say(f"Пробный {i + 1}/{n}: не прошёл фильтры и оценку, пропускаю.")

@@ -165,14 +165,28 @@ FACTCHECK = """Ти фактчекер. Знайди в пості КОЖНЕ ф
 Відповідь тільки JSON без markdown: {"ok": true/false, "problems": ["..."], "fixed_text": "..."}"""
 
 
+FACTCHECK_NOSEARCH = FACTCHECK.replace("і перевір його пошуком Google", "і перевір його за своїми знаннями. Якщо не впевнений у твердженні, вважай його помилкою і прибери або зроби обережнішим")
+
+
 def factcheck(gm: Gemini, text: str) -> tuple[str, str, str | None]:
     """Returns (status, text, note). status: ok | fixed | bad | unchecked."""
     current = text
+    search_ok = True
     for round_ in range(3):
         try:
-            data = parse_json(gm.generate(f"Пост:\n{current}", system=FACTCHECK, search=True, temperature=0.1))
+            data = parse_json(gm.generate(f"Пост:\n{current}", system=FACTCHECK if search_ok else FACTCHECK_NOSEARCH,
+                                          search=search_ok, temperature=0.1))
         except Exception as e:  # search quota / unsupported model / bad JSON
-            return "unchecked", current, f"перевірка фактів не вдалася: {str(e)[:120]}"
+            if search_ok:
+                search_ok = False  # free tier often has no Google Search quota: check by model knowledge
+                try:
+                    data = parse_json(gm.generate(f"Пост:\n{current}", system=FACTCHECK_NOSEARCH, temperature=0.1))
+                except Exception as e2:
+                    return "unchecked", current, f"перевірка фактів не вдалася: {str(e2)[:120]}"
+            else:
+                return "unchecked", current, f"перевірка фактів не вдалася: {str(e)[:120]}"
+        if data.get("ok") and not search_ok:
+            return "nosearch", current, "перевірено без пошуку Google (немає квоти)"
         if data.get("ok"):
             return ("ok" if round_ == 0 else "fixed"), current, None
         fixed = str(data.get("fixed_text") or "").strip()
