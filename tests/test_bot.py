@@ -1,0 +1,226 @@
+import json
+import random
+import tempfile
+import unittest
+from datetime import date, datetime
+from unittest import mock
+
+from bot import crypto, state as st, writer
+from bot.gemini import parse_json, rank_models
+from bot.main import Bot
+from bot.schedule import TZ, make_slots
+
+
+class FakeTG:
+    def __init__(self, updates=None):
+        self.sent, self.edits, self._updates, self.n = [], [], list(updates or []), 100
+
+    def updates(self, offset):
+        ups = [u for u in self._updates if offset is None or u["update_id"] >= offset]
+        return ups
+
+    def send(self, chat, text, buttons=None):
+        self.n += 1
+        self.sent.append((text, buttons))
+        return self.n
+
+    def edit(self, chat, mid, text):
+        self.edits.append((mid, text))
+
+    def answer(self, *a):
+        pass
+
+    def delete(self, *a):
+        self.deleted = True
+
+    def get_me(self):
+        return {"username": "kolodabot"}
+
+
+class FakeThreads:
+    def __init__(self):
+        self.published = []
+
+    def my_posts(self, n):
+        return [{"text": t} for t in self.published]
+
+    def publish_text(self, text):
+        self.published.append(text)
+        return {"id": str(len(self.published)), "permalink": "https://threads.net/p/x"}
+
+
+GOOD = "Дуб чи граб? Знаю родини, де це питання гостріше за футбол.\nА у вас вдома хто перемагає?"
+
+
+def make_bot(now, updates=None, s=None):
+    s = s or st.load("/nonexistent")
+    s["owner_chat_id"] = 1
+    b = Bot(s, tg=FakeTG(updates), gm=mock.Mock(model="m"), threads_secret="tok_secret_123",
+            enc_key="k", now=now, rnd=random.Random(1))
+    b.th = FakeThreads()
+    return b
+
+
+def kyiv(h, m=0, d=22):
+    return datetime(2026, 11, d, h, m, tzinfo=TZ)
+
+
+class FilterTests(unittest.TestCase):
+    def chk(self, text, sell=False, month=11):
+        return writer.check(text, sell=sell, today=date(2026, month, 22), recent=[], examples=[])
+
+    def test_good_passes(self):
+        self.assertIsNone(self.chk(GOOD))
+
+    def test_rejects(self):
+        self.assertIn("хештег", self.chk(GOOD + " #дрова"))
+        self.assertEqual(self.chk(GOOD + " 🔥"), "емодзі")
+        self.assertEqual(self.chk("x" * 230), "довше 220 символів (230)")
+        self.assertEqual(self.chk(GOOD + " Дзвоніть 050 950 50 90"), "контакт у непродаючому пості")
+        self.assertEqual(self.chk(GOOD + " Всего 4500 грн"), "ціна")
+        self.assertEqual(self.chk("Это ещё один пост про дрова и печку, который написан по-русски, а не нужно."), "російські літери")
+        self.assertIn("сезон", self.chk("Спека на дворі, а ви вже думаєте про дрова на зиму? Розумно, чи ні?"))
+        self.assertEqual(self.chk("- перше\n- друге, і ще трохи тексту, щоб довжина була нормальна для посту"), "список")
+
+    def test_sell_allows_phone(self):
+        self.assertIsNone(self.chk("Привеземо колоті дрова по Києву і області в день замовлення. Пишіть у дірект або дзвоніть: 050 950 50 90.", sell=True))
+
+    def test_similarity(self):
+        r = writer.check(GOOD, sell=False, today=date(2026, 11, 22), recent=[GOOD + "!"], examples=[])
+        self.assertIn("схожий", r)
+
+
+class MiscTests(unittest.TestCase):
+    def test_crypto_roundtrip(self):
+        blob = crypto.encrypt("THAAsecret", "key1")
+        self.assertEqual(crypto.decrypt(blob, "key1"), "THAAsecret")
+        self.assertIsNone(crypto.decrypt(blob, "key2"))
+        self.assertNotIn("THAAsecret", blob)
+
+    def test_slots(self):
+        for seed in range(50):
+            sl = make_slots(random.Random(seed))
+            self.assertEqual(len(sl), 3)
+            self.assertTrue(all(b - a >= 120 for a, b in zip(sl, sl[1:])))
+
+    def test_rank_models(self):
+        names = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-flash-image",
+                 "gemini-3.0-flash-preview", "gemini-2.5-pro", "text-embedding-004"]
+        r = rank_models(names)
+        self.assertEqual(r[0], "gemini-3.0-flash-preview")
+        self.assertNotIn("gemini-2.5-flash-image", r)
+        self.assertLess(r.index("gemini-2.5-flash"), r.index("gemini-2.5-flash-lite"))
+
+    def test_parse_json(self):
+        self.assertEqual(parse_json('```json\n{"ok": true}\n```'), {"ok": True})
+        self.assertEqual(parse_json('Ось: {"ok": false} кінець'), {"ok": False})
+
+    def test_state_roundtrip(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = st.load(f"{d}/s.json")
+            s["posts"].append({"text": "т"})
+            st.save(f"{d}/s.json", s)
+            self.assertEqual(st.load(f"{d}/s.json")["posts"][0]["text"], "т")
+
+    def test_pick_rubrics_season(self):
+        rub = writer.load("rubrics.json")
+        names = writer.pick_rubrics(rub, date(2026, 11, 22), ["Чесний куб"], 4, random.Random(2))
+        self.assertEqual(len(names), 4)
+        self.assertNotIn("Кора і сад", names)
+        self.assertNotIn("Чесний куб", names)
+
+
+class FlowTests(unittest.TestCase):
+    def test_off_by_default_no_drafts(self):
+        b = make_bot(kyiv(7))
+        b.tick()
+        self.assertEqual(b.s["days"], {})
+
+    def test_full_approval_flow(self):
+        b = make_bot(kyiv(7))
+        b.s["schedule_on"] = True
+        with mock.patch("bot.writer.write_post", return_value={"text": GOOD, "rubric": "Дуб чи граб", "score": 8,
+                                                                 "fact": "ok", "fact_note": None}):
+            b.tick()
+        slots = b.slots()
+        self.assertEqual(len(slots), 3)
+        self.assertEqual([x["status"] for x in slots], ["sent", "sent", "new"])  # 2 per run
+        self.assertEqual(b.th.published, [])  # nothing without approval
+        sl = slots[0]
+        cb = {"update_id": 5, "callback_query": {"id": "c", "from": {"id": 1}, "data": f"ok|{sl['id']}|{sl['v']}",
+                                                 "message": {"message_id": sl["msg_id"], "chat": {"id": 1}}}}
+        b2 = make_bot(kyiv(8), [cb], s=b.s)
+        b2.tick()
+        self.assertEqual(sl["status"], "approved")
+        self.assertEqual(b2.th.published, [])  # slot time not reached yet
+        b3 = make_bot(kyiv(11, 5), s=b.s)
+        b3.tick()
+        self.assertEqual(sl["status"], "published")
+        self.assertEqual(len(b3.th.published), 1)
+        b4 = make_bot(kyiv(11, 35), s=b.s)
+        b4.tick()  # nothing new approved -> no second post
+        self.assertEqual(len(b4.th.published), 0)
+
+    def test_stale_button_ignored(self):
+        b = make_bot(kyiv(7))
+        b.s["schedule_on"] = True
+        with mock.patch("bot.writer.write_post", return_value={"text": GOOD, "rubric": "x", "score": 8, "fact": "ok", "fact_note": None}):
+            b.tick()
+        sl = b.slots()[0]
+        cb = {"update_id": 5, "callback_query": {"id": "c", "from": {"id": 1}, "data": f"ok|{sl['id']}|999",
+                                                 "message": {"message_id": 1, "chat": {"id": 1}}}}
+        b2 = make_bot(kyiv(8), [cb], s=b.s)
+        b2.handle_updates()
+        self.assertEqual(sl["status"], "sent")
+
+    def test_owner_edit_and_stranger(self):
+        b = make_bot(kyiv(7))
+        b.s["schedule_on"] = True
+        with mock.patch("bot.writer.write_post", return_value={"text": GOOD, "rubric": "x", "score": 8, "fact": "ok", "fact_note": None}):
+            b.tick()
+        sl = b.slots()[0]
+        ups = [{"update_id": 7, "message": {"message_id": 50, "chat": {"id": 2, "type": "private"}, "text": "/on"}},
+               {"update_id": 8, "message": {"message_id": 51, "chat": {"id": 1, "type": "private"}, "text": "Мій текст поста",
+                                            "reply_to_message": {"message_id": sl["msg_id"]}}}]
+        b2 = make_bot(kyiv(8), ups, s=b.s)
+        b2.handle_updates()
+        self.assertEqual(sl["draft"]["text"], "Мій текст поста")
+        self.assertEqual(sl["status"], "sent")
+        self.assertEqual(b2.s["tg_offset"], 9)
+
+    def test_publish_failure_pauses(self):
+        b = make_bot(kyiv(12))
+        b.s["schedule_on"] = True
+        b.s["days"][b.today_key()] = {"slots": [
+            {"id": "a", "at": 600, "kind": "hook", "status": "approved", "draft": {"text": GOOD}, "v": 1},
+            {"id": "b", "at": 610, "kind": "hook", "status": "approved", "draft": {"text": GOOD + "?"}, "v": 1}]}
+        b.th.publish_text = mock.Mock(side_effect=RuntimeError("boom"))
+        b.publish_due()
+        b.now = kyiv(12, 40)
+        b.publish_due()
+        self.assertEqual(b.s["fail_streak"], 2)
+        self.assertTrue(b.s["paused_reason"])
+
+    def test_claim_owner(self):
+        s = st.load("/nonexistent")
+        b = Bot(s, tg=FakeTG([{"update_id": 1, "message": {"message_id": 1, "chat": {"id": 42, "type": "private"}, "text": "/start"}}]),
+                gm=None, threads_secret="", enc_key="k", now=kyiv(9))
+        b.handle_updates()
+        self.assertEqual(s["owner_chat_id"], 42)
+
+    def test_token_message_deleted(self):
+        b = make_bot(kyiv(9), [{"update_id": 1, "message": {"message_id": 3, "chat": {"id": 1, "type": "private"},
+                                                            "text": "THAA" + "x" * 120}}])
+        b.handle_updates()
+        self.assertTrue(getattr(b.tg, "deleted", False))
+
+    def test_day_rollover_expires(self):
+        b = make_bot(kyiv(9, d=21))
+        b.s["days"]["2026-11-21"] = {"slots": [{"id": "a", "at": 600, "status": "approved", "draft": {"text": "t"}, "msg_id": 5}]}
+        b.now = kyiv(7, d=22)
+        b.roll_days()
+        self.assertEqual(b.s["days"]["2026-11-21"]["slots"][0]["status"], "expired")
+
+
+if __name__ == "__main__":
+    unittest.main()

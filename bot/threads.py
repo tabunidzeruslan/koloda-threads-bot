@@ -1,0 +1,52 @@
+"""Threads Graph API wrapper (graph.threads.net)."""
+from __future__ import annotations
+
+import time
+
+from . import net
+
+BASE = "https://graph.threads.net/v1.0"
+
+
+class Threads:
+    def __init__(self, token: str):
+        self.token = token
+        net.register_secret(token)
+
+    def _get(self, path: str, **params) -> dict:
+        params["access_token"] = self.token
+        return net.request("GET", f"{BASE}/{path}", params=params)
+
+    def _post(self, path: str, **form) -> dict:
+        form["access_token"] = self.token
+        return net.request("POST", f"{BASE}/{path}", form=form)
+
+    def me(self) -> dict:
+        return self._get("me", fields="id,username")
+
+    def publishing_limit(self) -> dict:
+        return self._get("me/threads_publishing_limit", fields="quota_usage,config")
+
+    def my_posts(self, limit: int = 10) -> list[dict]:
+        return self._get("me/threads", fields="id,text,timestamp,permalink", limit=limit).get("data", [])
+
+    def replies(self, post_id: str) -> list[dict]:
+        return self._get(f"{post_id}/replies", fields="id,text,username,timestamp").get("data", [])
+
+    def insights(self) -> dict:
+        return self._get("me/threads_insights", metric="views")
+
+    def publish_text(self, text: str, wait: float = 4.0) -> dict:
+        container = self._post("me/threads", media_type="TEXT", text=text)["id"]
+        time.sleep(wait)
+        post_id = self._post("me/threads_publish", creation_id=container)["id"]
+        link = ""
+        try:
+            link = self._get(post_id, fields="permalink").get("permalink", "")
+        except net.NetError:
+            pass
+        return {"id": post_id, "permalink": link}
+
+    def refresh(self) -> dict:
+        return net.request("GET", "https://graph.threads.net/refresh_access_token",
+                           params={"grant_type": "th_refresh_token", "access_token": self.token})

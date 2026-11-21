@@ -1,0 +1,69 @@
+name: bot
+
+on:
+  schedule:
+    # every 30 min, 04:07-20:37 UTC = 06:07-22:37 Kyiv in winter (07:07-23:37 in summer)
+    - cron: "7,37 4-20 * * *"
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "tick = обычный запуск, selftest = проверка ключей, preview = пробные посты"
+        type: choice
+        options: [tick, selftest, preview]
+        default: tick
+      n:
+        description: "Сколько пробных постов (для preview)"
+        default: "3"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bot
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load state
+        run: |
+          mkdir -p .state
+          if git fetch -q --depth 1 origin state 2>/dev/null; then
+            git show FETCH_HEAD:state.json > .state/state.json
+          else
+            echo '{}' > .state/state.json
+          fi
+          cp .state/state.json /tmp/state.before
+
+      - name: Tests
+        run: python3 -m unittest discover -s tests -t . -q
+
+      - name: Run bot
+        env:
+          THREADS_TOKEN: ${{ secrets.THREADS_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          STATE_KEY: ${{ secrets.STATE_KEY }}
+        run: python3 -m bot.main --task "${{ inputs.task || 'tick' }}" --n "${{ inputs.n || '3' }}"
+
+      - name: Save state
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if cmp -s .state/state.json /tmp/state.before; then echo "state unchanged"; exit 0; fi
+          mkdir -p /tmp/st && cp .state/state.json /tmp/st/state.json && cd /tmp/st
+          git init -q -b state
+          git config user.name "koloda-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state.json
+          git commit -q -m "state $(date -u +%FT%TZ)"
+          for i in 1 2 3; do
+            git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:state && break
+            sleep $((i * 5))
+          done
