@@ -20,6 +20,11 @@ export default {
         await env.Q.put(`u:${String(upd.update_id).padStart(12, "0")}`, JSON.stringify(upd),
                         { expirationTtl: 3 * 86400 });
         await wake(env);
+        // stop the button spinner at once: Telegram accepts a method call as the webhook response
+        if (upd.callback_query) {
+          return Response.json({ method: "answerCallbackQuery", callback_query_id: upd.callback_query.id,
+                                 text: "Прийнято ✅ Оновлю за хвилину" });
+        }
       }
       return new Response("ok");
     }

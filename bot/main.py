@@ -35,16 +35,16 @@ HELP = ("Усе є в меню кнопками внизу чату:\n"
         "⚙️ Налаштування: тиша на день, автопілот, авто-картинки, пробні пости, перевірка\n\n"
         "Під чернеткою кнопки: Опублікувати / Обговорити / Інший текст / Пропустити. "
         "Щоб виправити текст, дайте відповідь (Reply) на чернетку своїм текстом.")
-MENU = [["📅 План", "📊 Статистика"], ["✍️ Пост зараз", "🔥 Хайп"],
-        ["🎨 Картинка", "💬 Коментарі"], ["🧠 Чат з ботом", "⚙️ Налаштування"], ["❓ Допомога"]]
-MENU_VERSION = 3
+# owner asked (22.11.2026) for a minimal menu; the other actions still work by plain words (статистика, хайп, чат…)
+MENU = [["📅 План на сьогодні"]]
+MENU_VERSION = 4
 CHAT_IDLE_MINUTES = 30
-MENU_ACTIONS = {"📅 План": "menu_plan", "📊 Статистика": "menu_stats", "✍️ Пост зараз": "menu_post",
+MENU_ACTIONS = {"📅 План на сьогодні": "menu_plan", "📅 План": "menu_plan", "📊 Статистика": "menu_stats", "✍️ Пост зараз": "menu_post",
                 "🔥 Хайп": "menu_hype", "🎨 Картинка": "menu_draw", "💬 Коментарі": "menu_comments",
                 "⚙️ Налаштування": "menu_settings", "❓ Допомога": "menu_help", "🧠 Чат з ботом": "menu_chat",
                 "🟢 Активувати": "menu_on", "⏸ Пауза": "menu_off"}
 WORD_ACTIONS = {  # plain words, Russian or Ukrainian, without the emoji
-    "план": "menu_plan", "статистика": "menu_stats", "стата": "menu_stats", "пост": "menu_post", "пост зараз": "menu_post",
+    "план": "menu_plan", "план на сьогодні": "menu_plan", "план на сегодня": "menu_plan", "статистика": "menu_stats", "стата": "menu_stats", "пост": "menu_post", "пост зараз": "menu_post",
     "пост сейчас": "menu_post", "хайп": "menu_hype", "тренды": "menu_hype", "тренди": "menu_hype", "картинка": "menu_draw",
     "коментарі": "menu_comments", "комментарии": "menu_comments", "налаштування": "menu_settings", "настройки": "menu_settings",
     "допомога": "menu_help", "помощь": "menu_help", "меню": "menu_help", "чат": "menu_chat", "чат з ботом": "menu_chat",
@@ -271,6 +271,16 @@ class Bot:
             except net.NetError:
                 pass
         return len(ups)
+
+    def poll_owner(self) -> None:
+        """Between slow steps (writing posts) take the owner's button presses, so they do not wait minutes."""
+        if not self.relay or getattr(self, "_polling", False):
+            return
+        self._polling = True
+        try:
+            self.handle_updates()
+        finally:
+            self._polling = False
 
     def handle_relay(self) -> int:
         try:
@@ -1125,6 +1135,7 @@ class Bot:
                 sl["status"] = "skipped"
                 self.say(f"⚠️ Не зміг написати добрий пост на {hhmm(sl['at'])} за 5 спроб, слот пропущено.")
             self.persist()
+            self.poll_owner()
 
     def background(self) -> str:
         parts = [trends.weather_line(self.s.get("weather")), trends.calendar_note(self.now.date())]
