@@ -319,3 +319,12 @@ class ImageTests(unittest.TestCase):
         b.now = kyiv(21)
         b.publish_due()
         b.th.publish_image.assert_called_once_with(GOOD, "https://raw.example/img.png")
+
+
+class SecretTests(unittest.TestCase):
+    def test_clean_token_from_curl(self):
+        from bot.main import clean_token
+        tok = "AbCdEf1234567890AbCdEf1234567890AbCdEf12"
+        blob = f'curl "https://api.cloudflare.com/client/v4/user/tokens/verify" \\\n -H "Authorization: Bearer {tok}"'
+        self.assertEqual(clean_token(blob), tok)
+        self.assertEqual(clean_token(tok), tok)

@@ -33,6 +33,20 @@ HYPE_SPACING_MIN = 30
 TIME_BUDGET = 6 * 60
 
 
+def clean_token(v: str) -> str:
+    """Owners sometimes paste the whole Cloudflare 'test your token' curl block: pull the token out of it."""
+    if " " not in v and "\n" not in v:
+        return v
+    m = re.search(r"Bearer\s+([A-Za-z0-9_\-]{30,})", v)
+    if m:
+        cand = m.group(1)
+    else:
+        words = re.findall(r"[A-Za-z0-9_\-]{35,60}", v)
+        cand = max(words, key=len) if words else v
+    net.register_secret(cand)
+    return cand
+
+
 def secret_shapes() -> list[str]:
     """Describe the form of secrets without revealing them (helps the owner fix copy/paste mistakes)."""
     import re as _re
@@ -44,6 +58,11 @@ def secret_shapes() -> list[str]:
             return
         raw = v
         v = v.strip()
+        if name == "CF_API_TOKEN" and (" " in v or "\n" in v):
+            fixed = clean_token(v)
+            if fixed != v:
+                out.append(f"ℹ️ CF_API_TOKEN: вставлен целый блок текста, бот вытащил из него токен (длина {len(fixed)})")
+                v = raw = fixed
         issues = []
         if raw != v:
             issues.append("пробелы или перенос строки по краям")
@@ -687,7 +706,7 @@ def main(argv=None) -> int:
     enc_key = net.env("STATE_KEY") or tg_token or "no-key"
     s = st.load(a.state)
     gm = Gemini(gm_key, s.get("gemini_model")) if gm_key else None
-    images = Images(cf_account=net.env("CF_ACCOUNT_ID"), cf_token=net.env("CF_API_TOKEN"),
+    images = Images(cf_account=net.env("CF_ACCOUNT_ID"), cf_token=clean_token(net.env("CF_API_TOKEN")),
                     gemini=gm if net.env("GEMINI_IMAGES") == "1" else None,
                     media_repo=net.env("MEDIA_REPO") or "tabunidzeruslan/koloda-media", media_token=net.env("MEDIA_TOKEN"))
     bot = Bot(s, images=images, tg=Telegram(tg_token) if tg_token else None,
