@@ -51,7 +51,7 @@ jobs:
           STATE_KEY: ${{ secrets.STATE_KEY }}
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          MEDIA_TOKEN: ${{ secrets.MEDIA_TOKEN }}
+          GH_MEDIA_TOKEN: ${{ github.token }}
         run: python3 -m bot.main --task "${{ inputs.task || 'tick' }}" --n "${{ inputs.n || '3' }}"
 
       - name: Save state

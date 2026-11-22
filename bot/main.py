@@ -75,7 +75,6 @@ def secret_shapes() -> list[str]:
     shape("CF_ACCOUNT_ID", lambda v: bool(_re.fullmatch(r"[0-9a-f]{32}", v)), "ожидается 32 символа 0-9 a-f (Account ID)")
     shape("CF_API_TOKEN", lambda v: 35 <= len(v) <= 60 and bool(_re.fullmatch(r"[A-Za-z0-9_\-]+", v)) and not _re.fullmatch(r"[0-9a-f]{32}", v),
           "не похоже на API Token Cloudflare (обычно 40 символов; не путать с Account ID и Global API Key)")
-    shape("MEDIA_TOKEN", lambda v: v.startswith(("github_pat_", "ghp_")), "ключ GitHub должен начинаться с github_pat_")
     return out
 
 
@@ -510,7 +509,7 @@ class Bot:
                 if url:
                     res = self.th.publish_image(text, url)
                 else:
-                    self.say("⚠️ Нет хранилища для картинки (секрет MEDIA_TOKEN), публикую пост без неё.")
+                    self.say("⚠️ Нет хранилища для картинки, публикую пост без неё.")
                     res = self.th.publish_text(text)
             else:
                 res = self.th.publish_text(text)
@@ -654,11 +653,11 @@ class Bot:
             out.append(f"ℹ️ Генераторы картинок: {', '.join(self.images.providers())}")
             chk("Картинка", img_test)
             if self.images.can_host:
-                chk("Хранилище картинок", lambda: self.images.media_repo + (" (публичное)" if not net.request(
+                chk("Хранилище картинок", lambda: self.images.media_repo + " → ветка media" + (" (публичное)" if not net.request(
                     "GET", f"https://api.github.com/repos/{self.images.media_repo}",
                     headers={"Authorization": f"Bearer {self.images.media_token}"}).get("private") else " ⚠️ репозиторий приватный, нужен Public"))
             else:
-                out.append("⚠️ Нет секрета MEDIA_TOKEN: картинки не опубликовать")
+                out.append("⚠️ Нет хранилища картинок: картинки не опубликовать")
         return "\n".join(out)
 
     def preview(self, n: int) -> None:
@@ -707,7 +706,7 @@ def main(argv=None) -> int:
     gm = Gemini(gm_key, s.get("gemini_model")) if gm_key else None
     images = Images(cf_account=net.env("CF_ACCOUNT_ID"), cf_token=clean_token(net.env("CF_API_TOKEN")),
                     gemini=gm if net.env("GEMINI_IMAGES") == "1" else None,
-                    media_repo=net.env("MEDIA_REPO") or "tabunidzeruslan/koloda-media", media_token=net.env("MEDIA_TOKEN"))
+                    media_repo=net.env("MEDIA_REPO") or net.env("GITHUB_REPOSITORY"), media_token=net.env("GH_MEDIA_TOKEN"))
     bot = Bot(s, images=images, tg=Telegram(tg_token) if tg_token else None,
               gm=gm,
               threads_secret=th_token, enc_key=enc_key, chat_id_env=net.env("TELEGRAM_CHAT_ID"),
