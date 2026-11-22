@@ -292,3 +292,14 @@ def image_prompt(gm: Gemini, post_text: str) -> dict:
         raise ValueError("пустий промпт")
     full = f"{prompt}\n\n{il['character']}\n{il['style']}\n{il['text_rule']}\n{il['banned']}"
     return {"prompt": full, "idea": str(data.get("idea", ""))[:200]}
+
+
+IMAGE_JUDGE = """Ти арт-директор Threads-акаунта. Більшість постів у Threads краще працюють БЕЗ картинки: текст сам по собі.
+Картинка потрібна лише коли вона підсилює жарт або ідею: є яскрава візуальна метафора, абсурдна сцена,
+порівняння «до/після», предмет, який смішно намалювати. Для питань, суперечок, зізнань і коротких думок картинка не потрібна.
+Відповідь тільки JSON: {"image": true/false, "why": "коротко"}"""
+
+
+def needs_image(gm: Gemini, text: str) -> tuple[bool, str]:
+    data = parse_json(gm.generate(f"Пост:\n{text}", system=IMAGE_JUDGE, json_mode=True, temperature=0.2))
+    return bool(data.get("image")), str(data.get("why", ""))[:150]

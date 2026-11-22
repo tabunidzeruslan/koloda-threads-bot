@@ -291,3 +291,31 @@ class TrendTests(unittest.TestCase):
         b.s["posts"].append({"text": "old", "at": kyiv(12, 30).isoformat()})  # 37 min ago: ok for hype
         b.publish_due()
         self.assertEqual(b.th.published, [GOOD])
+
+
+class ImageTests(unittest.TestCase):
+    def test_bot_decides_image_once_per_day(self):
+        b = make_bot(kyiv(7))
+        b.s["schedule_on"] = True
+        imgs = mock.Mock(can_host=True)
+        imgs.generate.return_value = {"bytes": b"x" * 9000, "provider": "cloudflare", "url": ""}
+        b.images = imgs
+        b.tg.send_photo = mock.Mock(return_value=(777, "FILEID"))
+        post = {"text": GOOD, "rubric": "x", "score": 8, "fact": "ok", "fact_note": None}
+        with mock.patch("bot.writer.write_post", side_effect=lambda *a, **k: dict(post)), \
+             mock.patch("bot.writer.needs_image", return_value=(True, "абсурдна сцена")), \
+             mock.patch("bot.writer.image_prompt", return_value={"prompt": "p", "idea": "i"}):
+            b.tick()
+        with_img = [x for x in b.slots() if (x.get("draft") or {}).get("image")]
+        self.assertEqual(len(with_img), 1)
+        self.assertEqual(with_img[0]["draft"]["image"]["file_id"], "FILEID")
+        self.assertEqual(with_img[0]["msg_id"], 777)
+        # publishing an image post uploads it and uses IMAGE
+        sl = with_img[0]
+        sl["status"] = "approved"
+        b.tg.download = mock.Mock(return_value=b"img")
+        imgs.host.return_value = "https://raw.example/img.png"
+        b.th.publish_image = mock.Mock(return_value={"id": "9", "permalink": "p"})
+        b.now = kyiv(21)
+        b.publish_due()
+        b.th.publish_image.assert_called_once_with(GOOD, "https://raw.example/img.png")

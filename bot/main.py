@@ -26,6 +26,7 @@ HELP = ("Команды:\n/status - что запланировано\n/on - в�
         "Чтобы поправить текст, ответьте (Reply) на черновик своим текстом.\n"
         "Бот просыпается раз в 30 минут, поэтому ответ приходит с задержкой.")
 MAX_GEN_PER_RUN = 2
+MAX_AUTO_IMAGES_PER_DAY = 1  # the bot decides itself which post deserves a picture
 TREND_HOURS = (9, 13, 17)   # Kyiv hours when the bot looks at Google Trends Ukraine
 MAX_HYPE_PER_DAY = 2
 HYPE_SPACING_MIN = 30
@@ -298,7 +299,7 @@ class Bot:
             kind = "sell" if self.s["planned_total"] % 5 == 0 else "hook"
             slots.append({"id": f"{key[5:7]}{key[8:]}-{i}", "at": at, "kind": kind, "status": "new",
                           "tries": 0, "rejects": 0, "v": 0, "draft": None, "msg_id": None,
-                          "want_image": kind == "hook" and self.s["planned_total"] % 5 == 2})
+                          "want_image": False})
         self.s["days"][key] = {"slots": slots}
         try:
             self.s["weather"] = trends.fetch_weather()
@@ -334,7 +335,7 @@ class Bot:
             post = self.write(sl["kind"] == "sell", topic=sl.get("topic") or "")
             if post:
                 sl["draft"] = post
-                if sl.get("want_image") and self.time_left():
+                if self.should_illustrate(sl) and self.time_left():
                     self.add_image(sl)
                 self.send_draft(sl)
             elif sl["tries"] >= 5:
@@ -357,6 +358,23 @@ class Bot:
             if self.gm and self.gm.model:
                 self.s["gemini_model"] = self.gm.model
         return post
+
+    def should_illustrate(self, sl: dict) -> bool:
+        if sl.get("want_image"):
+            return True
+        if not self.images or not self.gm or sl["kind"] == "sell":
+            return False
+        today = [x for x in self.slots() if (x.get("draft") or {}).get("image_auto")]
+        if len(today) >= MAX_AUTO_IMAGES_PER_DAY:
+            return False
+        try:
+            yes, why = writer.needs_image(self.gm, sl["draft"]["text"])
+        except Exception as e:
+            log("image judge failed:", e)
+            return False
+        if yes:
+            sl["draft"]["image_auto"] = why
+        return yes
 
     def add_image(self, sl: dict) -> None:
         if not self.images or not self.gm:
@@ -391,6 +409,8 @@ class Bot:
                    [("🔁 Другой текст", f"re|{ref}"), ("⏭ Пропустить", f"sk|{ref}")],
                    [("🎨 Другая картинка", f"im|{ref}"), ("🖼 Без картинки", f"ni|{ref}")] if img
                    else [("🎨 Добавить картинку", f"im|{ref}")]]
+        if img and d.get("image_auto"):
+            head += f"\n🎨 Бот решил, что здесь нужна картинка: {d['image_auto']}"
         if d.get("image_error") and not img:
             head += f"\n(картинка не получилась: {d['image_error'][:120]})"
         msg_id = None
@@ -483,6 +503,8 @@ class Bot:
             return False
         day["slots"].append(sl)
         sl["draft"] = post
+        if self.should_illustrate(sl) and self.time_left():
+            self.add_image(sl)
         self.send_draft(sl)
         self.persist()
         return True
