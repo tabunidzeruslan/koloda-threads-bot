@@ -60,7 +60,7 @@ COMMANDS = [("menu", "Показати меню"), ("status", "План на с�
             ("comments", "Нові коментарі"), ("on", "Активувати розклад"), ("off", "Пауза"),
             ("tysha", "Тиша на сьогодні"), ("selftest", "Перевірка"), ("help", "Допомога")]
 AWAIT_MINUTES = 20
-LISTEN_SECONDS = 480  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
+LISTEN_SECONDS = 60  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
 MAX_GEN_PER_RUN = 2
 MAX_AUTO_IMAGES_PER_DAY = 1  # the bot decides itself which post deserves a picture
 MAX_HYPE_IMAGES_PER_DAY = 1  # plus one for a trend post
@@ -1363,7 +1363,7 @@ def main(argv=None) -> int:
     th_token = net.env("THREADS_TOKEN")
     gm_key = net.env("GEMINI_API_KEY")
     enc_key = net.env("STATE_KEY") or tg_token or "no-key"
-    s = st.load(a.state)
+    s = st.load(a.state, enc_key if enc_key != "no-key" else "")
     cf_text = CFText(net.env("CF_ACCOUNT_ID"), clean_token(net.env("CF_API_TOKEN")))
     gm = Gemini(gm_key, s.get("gemini_model"), fallback=cf_text or None) if gm_key else None
     images = Images(cf_account=net.env("CF_ACCOUNT_ID"), cf_token=clean_token(net.env("CF_API_TOKEN")),
@@ -1372,7 +1372,7 @@ def main(argv=None) -> int:
     bot = Bot(s, images=images, tg=Telegram(tg_token) if tg_token else None,
               gm=gm,
               threads_secret=th_token, enc_key=enc_key, chat_id_env=net.env("TELEGRAM_CHAT_ID"),
-              persist=lambda: st.save(a.state, s))
+              persist=lambda: st.save(a.state, s, enc_key if enc_key != "no-key" else ""))
     try:
         if a.task == "tick":
             bot.tick()
@@ -1395,7 +1395,7 @@ def main(argv=None) -> int:
             else:
                 bot.preview(max(1, min(a.n, 5)))
     finally:
-        st.save(a.state, s)
+        st.save(a.state, s, enc_key if enc_key != "no-key" else "")
         summary = os.environ.get("GITHUB_STEP_SUMMARY")
         if summary and bot.summary:
             with open(summary, "a", encoding="utf-8") as f:
