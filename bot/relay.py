@@ -77,9 +77,12 @@ class Relay:
                         headers={"Authorization": f"Bearer {self.secret}"}, timeout=20)
 
     def healthy(self) -> bool:
+        self.last_error = ""
         try:
-            from urllib.request import urlopen
-            with urlopen(self.base + "/health", timeout=10) as r:
+            from urllib.request import Request, urlopen
+            req = Request(self.base + "/health", headers={"User-Agent": "koloda-threads-bot/1.0"})
+            with urlopen(req, timeout=10) as r:
                 return r.read().strip() == b"ok"
-        except Exception:
+        except Exception as e:
+            self.last_error = str(e)[:200]
             return False

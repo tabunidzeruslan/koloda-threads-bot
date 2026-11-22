@@ -1417,12 +1417,15 @@ def main(argv=None) -> int:
             u = relay_mod.deploy(cf_acc, cf_tok, tg_token=tg_token, dispatch_token=net.env("DISPATCH_TOKEN"),
                                  repo=os.environ.get("GITHUB_REPOSITORY", ""), script=script, log=log)
             r = relay_mod.Relay(u, tg_token)
-            for _ in range(10):
+            # a brand-new workers.dev address can take a few minutes to start answering
+            for i in range(40):
                 if r.healthy():
                     break
-                time.sleep(3)
-            if not r.healthy():
-                raise RuntimeError("Worker не відповідає на /health")
+                if i % 5 == 0:
+                    log("worker not answering yet:", r.last_error)
+                time.sleep(6)
+            else:
+                raise RuntimeError(f"Worker не відповідає на /health ({r.last_error})")
             bot.handle_updates()  # take what is waiting in getUpdates before switching to the webhook
             bot.tg.set_webhook(u + "/tg", relay_mod.derive(tg_token, "webhook"))
             s["relay_url"] = u
