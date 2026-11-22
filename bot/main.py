@@ -73,7 +73,7 @@ COMMANDS = [("menu", "Меню"), ("status", "План на сьогодні"), 
 AWAIT_MINUTES = 20
 LISTEN_SECONDS = 60  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
 MAX_GEN_PER_RUN = 2
-RESUME_V = 1  # bump to hand held-back posts back to the bot after a rules change
+RESUME_V = 2  # bump to hand held-back posts back to the bot after a rules change
 GOAL_FOLLOWERS = 10_000  # owner 22.11.2026: the agent's own target, never mentioned in posts
 IMAGE_EVERY_DAYS = 14  # owner 22.11.2026: pictures almost never, at most one automatic picture in 2 weeks
 OAUTH_APP_ID = os.environ.get("THREADS_APP_ID", "1152144817371787")  # Koloda Threads Bot (public id)
@@ -1610,7 +1610,9 @@ class Bot:
             return 0
         n = 0
         for x in self.slots():
-            if x["status"] == "sent" and x.get("owner_only") and x["kind"] not in ("now", "sell-now"):
+            later = x["status"] == "skipped" and x["at"] > minutes_of(self.now) and not x.get("resumed")
+            if (later or (x["status"] == "sent" and x.get("owner_only"))) and x["kind"] not in ("now", "sell-now"):
+                x["resumed"] = True
                 x.update(status="new", draft=None, tries=0, owner_only=False, auto=False, lib_judged=None)
                 n += 1
         return n
