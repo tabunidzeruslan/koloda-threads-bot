@@ -391,6 +391,11 @@ class FreedomTests(unittest.TestCase):
         self.assertEqual(len(b.th.published), 1)
 
 
+class HumanTextTests(unittest.TestCase):
+    def test_humanize(self):
+        self.assertEqual(writer.humanize("Дрова — це тепло 🔥🔥😂\n— Ні, це любов 🙂"), "Дрова - це тепло 🔥\n- Ні, це любов")
+
+
 class QuietTests(unittest.TestCase):
     def test_quiet_hours_and_freedom_silence(self):
         b = make_bot(kyiv(8))
