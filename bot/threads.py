@@ -39,6 +39,15 @@ class Threads:
         return self._get("keyword_search", q=q, search_type="RECENT", limit=limit,
                          fields="id,text,permalink,username,timestamp").get("data", [])
 
+    def token_scopes(self) -> list[str]:
+        """Permissions inside the current token (debug_token); empty if Threads does not answer."""
+        try:
+            d = net.request("GET", "https://graph.threads.net/v1.0/debug_token",
+                            params={"input_token": self.token, "access_token": self.token}).get("data", {})
+            return list(d.get("scopes") or [])
+        except Exception:
+            return []
+
     def insights(self) -> dict:
         return self._get("me/threads_insights", metric="views")
 

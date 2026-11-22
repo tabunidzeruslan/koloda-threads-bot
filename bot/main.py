@@ -1539,6 +1539,11 @@ class Bot:
                      f"@{p.get('username', '?')}: {(p.get('text') or '').strip()[:160]}\n{p.get('permalink', '')}\n\n"
                      "Відповідаєте ви самі, вручну в Threads.")
         elif force:
+            if err:
+                tok = self.s.get("token") or {}
+                sc = self.th.token_scopes()
+                err += (f"\nТокен з GitHub отримано: {str(tok.get('first_seen', '?'))[:16].replace('T', ' ')}. "
+                        + (f"Права в токені: {', '.join(sc)}" if sc else "Права токена Threads не показав."))
             self.say("Нових постів про пошук дров не знайшов." + (f" Помилка: {err}" if err else
                      " Поки Meta не схвалила доступ, пошук бачить тільки наші пости."))
 
