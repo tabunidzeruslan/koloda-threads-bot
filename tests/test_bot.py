@@ -242,3 +242,52 @@ class VoiceTests(unittest.TestCase):
         b.s["days"][b.today_key()] = {"slots": [{"id": "a", "at": 600, "kind": "hook", "status": "approved", "draft": {"text": GOOD}, "v": 1}]}
         b.publish_due()
         self.assertEqual(b.th.published, [])
+
+
+from bot import trends as tr
+
+tr.fetch_weather = lambda: {"days": [{"date": "2026-11-22", "tmin": 1, "tmax": 4, "snow_cm": 0, "rain_mm": 0},
+                                      {"date": "2026-11-23", "tmin": -9, "tmax": -3, "snow_cm": 0, "rain_mm": 0}]}
+
+RSS = """<?xml version="1.0"?><rss xmlns:ht="https://trends.google.com/trending/rss" version="2.0"><channel>
+<item><title>мудрик</title><ht:approx_traffic>20000+</ht:approx_traffic>
+<ht:news_item><ht:news_item_title>Мудрик дав інтервʼю</ht:news_item_title><ht:news_item_url>https://example.com/a</ht:news_item_url><ht:news_item_source>Sport</ht:news_item_source></ht:news_item>
+</item><item><title>погода київ</title><ht:approx_traffic>5000+</ht:approx_traffic></item></channel></rss>"""
+
+
+class TrendTests(unittest.TestCase):
+    def test_parse_rss(self):
+        t = tr.parse_trends(RSS)
+        self.assertEqual(t[0]["title"], "мудрик")
+        self.assertEqual(t[0]["news"][0]["url"], "https://example.com/a")
+        self.assertEqual(t[1]["news"], [])
+
+    def test_weather_event(self):
+        self.assertIn("мороз", tr.weather_event(tr.fetch_weather()))
+        self.assertIsNone(tr.weather_event({"days": [{"tmin": 2, "tmax": 5, "snow_cm": 0}, {"tmin": 1, "tmax": 4, "snow_cm": 0}]}))
+        self.assertIn("Погода в Києві", tr.weather_line(tr.fetch_weather()))
+
+    def test_plan_marks_weather_topic(self):
+        b = make_bot(kyiv(7))
+        b.s["schedule_on"] = True
+        b.plan_today()
+        self.assertTrue(any("мороз" in (x.get("topic") or "") for x in b.slots()))
+
+    def test_trend_hype_flow(self):
+        b = make_bot(kyiv(13, 7))
+        b.s["schedule_on"] = True
+        b.s["days"][b.today_key()] = {"slots": []}
+        post = {"text": GOOD, "rubric": "Хайп", "score": 8, "fact": "ok", "fact_note": None}
+        with mock.patch("bot.trends.fetch_trends", return_value=tr.parse_trends(RSS)), \
+             mock.patch("bot.writer.pick_trend", return_value={"title": "мудрик", "topic": "мудрик: інтервʼю", "url": "https://example.com/a"}), \
+             mock.patch("bot.writer.write_post", return_value=post):
+            b.check_trends()
+            b.check_trends()  # same hour: no second check
+        hype = [x for x in b.slots() if x["kind"] == "hype"]
+        self.assertEqual(len(hype), 1)
+        self.assertEqual(hype[0]["status"], "sent")
+        self.assertIn("https://example.com/a", b.tg.sent[-1][0])
+        hype[0]["status"] = "approved"
+        b.s["posts"].append({"text": "old", "at": kyiv(12, 30).isoformat()})  # 37 min ago: ok for hype
+        b.publish_due()
+        self.assertEqual(b.th.published, [GOOD])

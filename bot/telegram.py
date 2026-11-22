@@ -44,6 +44,18 @@ class Telegram:
         except net.NetError:
             pass  # callbacks expire if the bot answers late; harmless
 
+    def download_photo(self, file_id: str) -> tuple[str, str] | None:
+        """Returns (mime, base64) of a photo the owner sent, or None."""
+        import base64
+        from urllib.request import urlopen
+        try:
+            path = self.call("getFile", file_id=file_id)["file_path"]
+            with urlopen(self.base.replace("/bot", "/file/bot") + "/" + path, timeout=30) as r:
+                data = r.read()
+        except Exception:
+            return None
+        return ("image/png" if path.endswith(".png") else "image/jpeg", base64.b64encode(data).decode())
+
     def delete(self, chat_id: int, message_id: int) -> None:
         try:
             self.call("deleteMessage", chat_id=chat_id, message_id=message_id)

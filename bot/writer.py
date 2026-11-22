@@ -118,7 +118,8 @@ SYSTEM = """Ти пишеш пости для Threads від імені київ
 - Не представляйся («Привіт, я…»)."""
 
 
-def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[str]) -> str:
+def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[str], background: str = "",
+                 topic: str = "") -> str:
     biz, facts, style = load("business.json"), load("facts.json"), load("style.json")
     voice = {k: v for k, v in load("voice.json").items() if k != "note"}
     fmt = voice["formats"][(today.toordinal() + len(recent)) % len(voice["formats"])]
@@ -131,23 +132,32 @@ def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[st
         "Приклади тону (не копіюй, лише стиль): " + json.dumps(style["examples"], ensure_ascii=False),
         "Недавні пости (не повторюй теми і жарти): " + json.dumps(recent[-12:], ensure_ascii=False),
     ]
+    if background:
+        lines.append("Контекст дня (можна використати, не обовʼязково): " + background)
+    if topic:
+        lines.append("ГОЛОВНА ТЕМА всіх 4 варіантів (інфопривід, реакція на хайп): " + topic +
+                     "\nЗроби дотепну реакцію з містком до дров, тепла, дому чи чесного обʼєму. Не вигадуй деталей події, "
+                     "яких немає в описі. Не ображай людей з новини. Якщо тема про смерть, війну, трагедію, політику "
+                     "або релігію, поверни {\"variants\": []}.")
     if sell:
         lines.append("Це ПРОДАЮЧИЙ пост: 1-3 речення до 260 символів, м'яко, з контактом "
                      f"({biz['contacts']['phone']} або «пишіть у дірект»). Приклад: {style['sell_example']}")
         lines.append("Напиши 4 різні варіанти продаючого поста з різними кутами (швидкість, чесний об'єм, сухі дрова, зручність).")
-    else:
+    elif not topic:
         lines.append("Напиши 4 варіанти, по одному на кожну рубрику: " + json.dumps(rubrics, ensure_ascii=False))
     lines.append('Відповідь тільки JSON: {"variants": [{"rubric": "...", "text": "..."}]}')
     return "\n".join(lines)
 
 
-def generate_variants(gm: Gemini, *, today: date, rubrics: list[str], sell: bool, recent: list[str]) -> list[dict]:
-    raw = gm.generate(build_prompt(today=today, rubrics=rubrics, sell=sell, recent=recent), system=SYSTEM, json_mode=True)
+def generate_variants(gm: Gemini, *, today: date, rubrics: list[str], sell: bool, recent: list[str],
+                      background: str = "", topic: str = "", images: list | None = None) -> list[dict]:
+    raw = gm.generate(build_prompt(today=today, rubrics=rubrics, sell=sell, recent=recent, background=background,
+                                   topic=topic), system=SYSTEM, json_mode=True, images=images)
     data = parse_json(raw)
     out = []
     for v in data.get("variants", []) if isinstance(data, dict) else []:
         if isinstance(v, dict) and isinstance(v.get("text"), str):
-            out.append({"rubric": SELL if sell else str(v.get("rubric", "")), "text": v["text"].strip()})
+            out.append({"rubric": SELL if sell else ("Хайп" if topic else str(v.get("rubric", ""))), "text": v["text"].strip()})
     return out
 
 
@@ -181,6 +191,30 @@ FACTCHECK = """Ти фактчекер. Знайди в пості КОЖНЕ ф
 FACTCHECK_NOSEARCH = FACTCHECK.replace("і перевір його пошуком Google", "і перевір його за своїми знаннями. Якщо не впевнений у твердженні, вважай його помилкою і прибери або зроби обережнішим")
 
 
+PICKER = """Ти SMM-редактор зухвалого київського бренду дров Koloda в Threads. Із трендів пошуку України вибери ОДНУ тему,
+на яку бренд може дотепно відреагувати (спорт, шоубіз, побут, погода, мемні новини), з містком до дров, тепла чи дому.
+НЕ можна: війна, обстріли, загиблі, трагедії, хвороби, політика, релігія, криміналь, скандали з дітьми.
+Якщо нічого не підходить, pick = -1. Відповідь тільки JSON: {"pick": 0, "topic": "коротко суть події з заголовків", "why": "..."}"""
+
+
+def pick_trend(gm: Gemini, trends: list[dict], used: list[str]) -> dict | None:
+    items = [t for t in trends if t["title"] not in used][:20]
+    if not items:
+        return None
+    listing = "\n".join(f"{i}: {t['title']} ({t['traffic']}) - " + " | ".join(n["title"] for n in t["news"][:2])
+                        for i, t in enumerate(items))
+    data = parse_json(gm.generate("Тренди:\n" + listing, system=PICKER, json_mode=True, temperature=0.3))
+    try:
+        i = int(data.get("pick", -1))
+    except (TypeError, ValueError):
+        return None
+    if not 0 <= i < len(items):
+        return None
+    t = items[i]
+    link = t["news"][0]["url"] if t["news"] else ""
+    return {"title": t["title"], "topic": f"{t['title']}: {data.get('topic', '')}", "url": link}
+
+
 def factcheck(gm: Gemini, text: str) -> tuple[str, str, str | None]:
     """Returns (status, text, note). status: ok | fixed | bad | unchecked."""
     current = text
@@ -211,11 +245,13 @@ def factcheck(gm: Gemini, text: str) -> tuple[str, str, str | None]:
 
 
 def write_post(gm: Gemini, *, today: date, sell: bool, recent: list[str], last_rubrics: list[str],
-               rnd: random.Random | None = None, log=print) -> dict | None:
+               rnd: random.Random | None = None, log=print, background: str = "", topic: str = "",
+               images: list | None = None) -> dict | None:
     rnd = rnd or random.Random()
     examples = load("style.json")["examples"]
-    rubrics = [] if sell else pick_rubrics(load("rubrics.json"), today, last_rubrics, 4, rnd)
-    variants = generate_variants(gm, today=today, rubrics=rubrics, sell=sell, recent=recent)
+    rubrics = [] if sell or topic else pick_rubrics(load("rubrics.json"), today, last_rubrics, 4, rnd)
+    variants = generate_variants(gm, today=today, rubrics=rubrics, sell=sell, recent=recent, background=background,
+                                 topic=topic, images=images)
     passed = []
     for v in variants:
         why = check(v["text"], sell=sell, today=today, recent=recent, examples=examples)

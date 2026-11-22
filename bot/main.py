@@ -9,7 +9,7 @@ import sys
 import time
 from datetime import date, datetime
 
-from . import crypto, net, state as st, writer
+from . import crypto, net, state as st, trends, writer
 from .gemini import Gemini
 from .schedule import (LAST_PUBLISH_MIN, SPACING_MIN, hhmm, make_slots, minutes_of, now_kyiv, since_minutes)
 from .telegram import Telegram
@@ -25,6 +25,9 @@ HELP = ("Команды:\n/status - что запланировано\n/on - в�
         "Чтобы поправить текст, ответьте (Reply) на черновик своим текстом.\n"
         "Бот просыпается раз в 30 минут, поэтому ответ приходит с задержкой.")
 MAX_GEN_PER_RUN = 2
+TREND_HOURS = (9, 13, 17)   # Kyiv hours when the bot looks at Google Trends Ukraine
+MAX_HYPE_PER_DAY = 2
+HYPE_SPACING_MIN = 30
 TIME_BUDGET = 6 * 60
 
 
@@ -145,7 +148,7 @@ class Bot:
 
     def on_message(self, m: dict) -> None:
         chat = m.get("chat", {})
-        text = (m.get("text") or "").strip()
+        text = (m.get("text") or m.get("caption") or "").strip()
         if chat.get("type") != "private":
             return
         if not self.owner:
@@ -160,7 +163,7 @@ class Bot:
             self.say("Похоже на ключ или токен. Я удалил сообщение: секреты вводятся только в GitHub → Settings → Secrets.")
             return
         reply_to = (m.get("reply_to_message") or {}).get("message_id")
-        if reply_to and not text.startswith("/"):
+        if reply_to and not text.startswith("/") and not m.get("photo"):
             return self.on_edit(reply_to, text)
         cmd, _, arg = text.partition(" ")
         cmd = cmd.split("@")[0].lower()
@@ -174,6 +177,18 @@ class Bot:
         elif cmd == "/off":
             self.s["schedule_on"] = False
             self.say("Выключено. Новые черновики не готовлю, одобренные тоже не публикую.")
+        elif cmd == "/hype":
+            img = None
+            if m.get("photo"):
+                img = self.tg.download_photo(m["photo"][-1]["file_id"])
+            fwd = (m.get("reply_to_message") or {}).get("text") or ""
+            topic = " ".join(x for x in (arg.strip(), fwd.strip()) if x) or ("тема на скріншоті" if img else "")
+            if not topic:
+                self.say("Напишите после /hype, о чём хайп, или пришлите скрин с подписью /hype.")
+                return
+            self.make_hype(topic, url="", images=[img] if img else None, source="ваш /hype")
+        elif cmd == "/trends":
+            self.check_trends(force=True)
         elif cmd in ("/tysha", "/тиша", "/quiet"):
             self.s["quiet_day"] = self.today_key()
             self.say("Тишина до конца дня: ничего не публикую и не присылаю черновики. Завтра продолжу сам.")
@@ -253,6 +268,14 @@ class Bot:
             slots.append({"id": f"{key[5:7]}{key[8:]}-{i}", "at": at, "kind": kind, "status": "new",
                           "tries": 0, "rejects": 0, "v": 0, "draft": None, "msg_id": None})
         self.s["days"][key] = {"slots": slots}
+        try:
+            self.s["weather"] = trends.fetch_weather()
+        except Exception as e:
+            log("weather failed:", e)
+        event = trends.weather_event(self.s.get("weather"))
+        hooks = [x for x in slots if x["kind"] == "hook"]
+        if event and hooks:
+            hooks[-1]["topic"] = event + " Пост про це: погода як привід подумати про сухі дрова, з гумором."
 
     def time_left(self) -> bool:
         return time.monotonic() - self.started < TIME_BUDGET
@@ -272,7 +295,7 @@ class Bot:
                 continue
             made += 1
             sl["tries"] += 1
-            post = self.write(sl["kind"] == "sell")
+            post = self.write(sl["kind"] == "sell", topic=sl.get("topic") or "")
             if post:
                 sl["draft"] = post
                 self.send_draft(sl)
@@ -281,10 +304,14 @@ class Bot:
                 self.say(f"⚠️ Не смог написать хороший пост на {hhmm(sl['at'])} за 5 попыток, слот пропущен.")
             self.persist()
 
-    def write(self, sell: bool) -> dict | None:
+    def background(self) -> str:
+        return " ".join(x for x in (trends.weather_line(self.s.get("weather")), trends.calendar_note(self.now.date())) if x)
+
+    def write(self, sell: bool, topic: str = "", images: list | None = None) -> dict | None:
         try:
             post = writer.write_post(self.gm, today=self.now.date(), sell=sell, recent=self.recent_texts(),
-                                     last_rubrics=self.last_rubrics(), rnd=self.rnd, log=log)
+                                     last_rubrics=self.last_rubrics(), rnd=self.rnd, log=log,
+                                     background=self.background(), topic=topic, images=images)
         except Exception as e:
             log("writer failed:", e)
             return None
@@ -298,6 +325,9 @@ class Bot:
         sl["v"] = sl.get("v", 0) + 1
         fact = {"ok": "факты ✅", "fixed": "факты исправлены ✅", "unchecked": "факты НЕ проверены ⚠️",
                 "nosearch": "факты проверены без поиска ⚠️", "owner": "ваш текст"}.get(d.get("fact"), "")
+        if sl["kind"] == "hype" and not note:
+            note = (f"🔥 Хайп ({sl.get('source', '')}): {sl.get('topic', '')[:150]}\n{sl.get('url') or ''}\n"
+                    f"оценка {d.get('score')}/10 · {fact}").strip()
         head = note or (f"📝 Черновик на {hhmm(sl['at'])}" + (" · продающий" if sl["kind"] == "sell" else "")
                         + f" · {d.get('rubric', '')} · оценка {d.get('score')}/10 · {fact}")
         if d.get("fact_note") and d.get("fact") != "ok":
@@ -316,12 +346,13 @@ class Bot:
         if now_min > LAST_PUBLISH_MIN:
             return
         last = self.s["posts"][-1]["at"] if self.s["posts"] else None
-        if since_minutes(last, self.now) < SPACING_MIN:
+        gap = since_minutes(last, self.now)
+        if gap < HYPE_SPACING_MIN or since_minutes(self.s.get("last_fail"), self.now) < 15:
             return
-        if since_minutes(self.s.get("last_fail"), self.now) < 15:
-            return
-        for sl in self.slots():
-            if sl["status"] == "approved" and now_min >= sl["at"]:
+        ready = [x for x in self.slots() if x["status"] == "approved" and now_min >= x["at"]]
+        ready.sort(key=lambda x: (x["kind"] != "hype", x["at"]))  # hype is time-sensitive: first
+        for sl in ready:
+            if sl["kind"] == "hype" or gap >= SPACING_MIN:
                 self.publish(sl)
                 return  # one post per run
 
@@ -351,6 +382,53 @@ class Bot:
         self.s["posts"] = self.s["posts"][-60:]
         if sl.get("msg_id") and self.tg and self.owner:
             self.tg.edit(self.owner, sl["msg_id"], f"🟢 Опубликовано {res.get('permalink', '')}\n\n{text}")
+
+    # ---------- hype
+    def make_hype(self, topic: str, *, url: str, images: list | None = None, source: str = "") -> bool:
+        if not self.gm:
+            return False
+        key = self.today_key()
+        day = self.s["days"].setdefault(key, {"slots": []})
+        n = sum(1 for x in day["slots"] if x["kind"] == "hype")
+        sl = {"id": f"{key[5:7]}{key[8:]}-h{n}", "at": minutes_of(self.now), "kind": "hype", "status": "new",
+              "tries": 1, "rejects": 0, "v": 0, "draft": None, "msg_id": None, "topic": topic[:600],
+              "url": url, "source": source}
+        post = self.write(False, topic=sl["topic"], images=images)
+        if not post:
+            if source.startswith("ваш"):
+                self.say("Не смог сделать хороший пост на эту тему (не прошёл фильтры или тема запретная).")
+            return False
+        day["slots"].append(sl)
+        sl["draft"] = post
+        self.send_draft(sl)
+        self.persist()
+        return True
+
+    def check_trends(self, force: bool = False) -> None:
+        if not self.gm or self.quiet() or (not force and (not self.s["schedule_on"] or self.s.get("paused_reason"))):
+            return
+        key = self.today_key()
+        mark = f"{key}-{self.now.hour}"
+        if not force:
+            if self.now.hour not in TREND_HOURS or mark in self.s.get("trend_checks", []) or not self.time_left():
+                return
+            if sum(1 for x in self.slots() if x["kind"] == "hype") >= MAX_HYPE_PER_DAY:
+                return
+        self.s["trend_checks"] = (self.s.get("trend_checks", []) + [mark])[-20:]
+        try:
+            items = trends.fetch_trends()
+            pick = writer.pick_trend(self.gm, items, self.s.get("trends_used", []))
+        except Exception as e:
+            log("trends failed:", e)
+            if force:
+                self.say(f"Не удалось получить тренды: {net.scrub(str(e))[:200]}")
+            return
+        if not pick:
+            if force:
+                self.say("Сейчас в трендах нет безопасной темы для нас (или всё про войну и политику).")
+            return
+        self.s["trends_used"] = (self.s.get("trends_used", []) + [pick["title"]])[-60:]
+        self.make_hype(pick["topic"], url=pick["url"], source="Google Trends")
 
     # ---------- owner tools
     def status_text(self) -> str:
@@ -440,6 +518,7 @@ class Bot:
         self.plan_today()
         self.publish_due()
         self.draft_pending()
+        self.check_trends()
         self.publish_due()
         self.maybe_refresh_token()
         self.s["last_run"] = self.now.isoformat()

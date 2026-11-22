@@ -54,8 +54,11 @@ class Gemini:
         return self._models
 
     def generate(self, prompt: str, *, system: str = "", json_mode: bool = False, search: bool = False,
-                 temperature: float = 0.9) -> str:
-        body: dict = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                 temperature: float = 0.9, images: list | None = None) -> str:
+        parts: list = [{"text": prompt}]
+        for mime, b64 in images or []:
+            parts.append({"inline_data": {"mime_type": mime, "data": b64}})
+        body: dict = {"contents": [{"role": "user", "parts": parts}],
                       "generationConfig": {"temperature": temperature}}
         if system:
             body["systemInstruction"] = {"parts": [{"text": system}]}

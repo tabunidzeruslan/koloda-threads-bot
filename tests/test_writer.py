@@ -16,7 +16,7 @@ class FakeGM:
         self.fact_ok = fact_ok
         self.calls = []
 
-    def generate(self, prompt, system="", json_mode=False, search=False, temperature=0.9):
+    def generate(self, prompt, system="", json_mode=False, search=False, temperature=0.9, images=None):
         self.calls.append((system[:20], search))
         if system == writer.SYSTEM:
             return json.dumps({"variants": [{"rubric": "Дуб чи граб", "text": GOOD},
@@ -52,7 +52,7 @@ class WriterTests(unittest.TestCase):
 
 
 class NoSearchGM(FakeGM):
-    def generate(self, prompt, system="", json_mode=False, search=False, temperature=0.9):
+    def generate(self, prompt, system="", json_mode=False, search=False, temperature=0.9, images=None):
         if search:
             raise RuntimeError("HTTP 429 quota")
         if system == writer.FACTCHECK_NOSEARCH:
