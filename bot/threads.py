@@ -33,12 +33,6 @@ class Threads:
     def replies(self, post_id: str) -> list[dict]:
         return self._get(f"{post_id}/replies", fields="id,text,username,timestamp").get("data", [])
 
-    def keyword_search(self, q: str, limit: int = 25) -> list[dict]:
-        """Public posts with the keyword (threads_keyword_search). Before Meta approves the
-        permission, Threads returns only our own posts."""
-        return self._get("keyword_search", q=q, search_type="RECENT", limit=limit,
-                         fields="id,text,permalink,username,timestamp").get("data", [])
-
     def token_scopes(self) -> list[str]:
         """Permissions inside the current token (debug_token); empty if Threads does not answer."""
         try:

@@ -538,33 +538,6 @@ class LearnTests(unittest.TestCase):
         self.assertIsNone(chk(GOOD))
 
 
-@mock.patch("bot.main.BUYER_SEARCH", True)
-class BuyerSearchTests(unittest.TestCase):
-    def test_shows_new_buyer_posts_once(self):
-        b = make_bot(kyiv(11))
-        post = {"id": "77", "username": "olena", "text": "Порадьте, де купити дрова в Києві?",
-                "permalink": "https://threads.net/p/77", "timestamp": "2026-11-22T08:00:00+0000"}
-        own = dict(post, id="78", username="koloda_tm")
-        old = dict(post, id="79", timestamp="2026-11-10T08:00:00+0000")
-        b.th.keyword_search = mock.Mock(return_value=[post, own, old])
-        b.find_buyers()
-        self.assertEqual(sum("@olena" in t for t in map(str, b.tg.sent)), 1)
-        self.assertFalse(any("@koloda_tm" in str(t) for t in b.tg.sent))
-        n = len(b.tg.sent)
-        b.find_buyers(force=True)  # same post is not shown twice
-        self.assertFalse(any("@olena" in str(t) for t in b.tg.sent[n:]))
-
-
-@mock.patch("bot.main.BUYER_SEARCH", True)
-class BuyerWordTests(unittest.TestCase):
-    def test_word_runs_search_at_night(self):
-        b = make_bot(kyiv(4))
-        b.th.keyword_search = mock.Mock(return_value=[])
-        b.owner_turn(b.on_message, {"message_id": 5, "chat": {"id": 1, "type": "private"}, "text": "клієнти"})
-        b.th.keyword_search.assert_called()
-        self.assertTrue(any("не знайшов" in str(x) for x in b.tg.sent))
-
-
 class OAuthTests(unittest.TestCase):
     def test_pasted_redirect_saves_token(self):
         b = make_bot(kyiv(4))
