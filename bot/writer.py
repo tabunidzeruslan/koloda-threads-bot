@@ -815,6 +815,20 @@ IMAGE_JUDGE = """Ти арт-директор Threads-акаунта. Більш
 Відповідь тільки JSON: {"image": true/false, "why": "коротко"}"""
 
 
+LIB_JUDGE = """Ти редактор Threads київської компанії дров Koloda. Є готовий пост із бібліотеки і сьогоднішній фон
+(погода, календар, про що говорять Київ і Україна). Чи цей пост сьогодні живий і доречний? Якщо він плаский, пластмасовий,
+шаблонний або є явно цікавіша актуальна тема дня (без політики, війни, трагедій), скажи fresh=false: тоді пост напишуть
+наново під актуалочку. Інакше fresh=true. Відповідь тільки JSON: {"fresh": true/false, "why": "коротко українською"}"""
+
+
+def library_fresh(gm: Gemini, text: str, background: str) -> tuple[bool, str]:
+    data = parse_json(gm.generate(f"Фон дня: {background}\n\nПост із бібліотеки:\n{text}", system=LIB_JUDGE,
+                                  json_mode=True, temperature=0.2))
+    if not isinstance(data, dict):
+        return True, ""
+    return bool(data.get("fresh", True)), str(data.get("why", ""))[:150]
+
+
 def needs_image(gm: Gemini, text: str, trend: bool = False) -> tuple[bool, str]:
     hint = ("Це пост на гарячу тему дня: картинка з Івановичем доречна тільки якщо жарт без неї не працює.\n"
             if trend else "")

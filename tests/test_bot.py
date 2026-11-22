@@ -671,3 +671,12 @@ class OwnerFeedbackTests(unittest.TestCase):
     def test_shelling_news_is_not_a_stop(self):
         self.assertEqual(writer.somber_day(["Масована ракетна атака на Київ вночі"]), "")
         self.assertTrue(writer.somber_day(["У Києві оголошено день жалоби"]))
+
+    def test_restart_hands_doubtful_post_back(self):
+        b = make_bot(kyiv(13, 55))
+        b.s["schedule_on"], b.s["autopilot"] = True, True
+        sl = {"id": "1122-1", "at": 823, "kind": "hook", "status": "sent", "owner_only": True, "tries": 2,
+              "draft": {"text": GOOD, "score": 8, "fact": "ok"}}
+        b.s["days"][b.today_key()] = {"slots": [sl]}
+        self.assertEqual(b.resume_doubtful(), 1)
+        self.assertEqual((sl["status"], sl["draft"], sl["owner_only"]), ("new", None, False))

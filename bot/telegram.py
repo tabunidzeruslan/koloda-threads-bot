@@ -30,7 +30,7 @@ class Telegram:
 
     def set_webhook(self, url: str, secret: str) -> None:
         self.call("setWebhook", url=url, secret_token=secret, allowed_updates=["message", "callback_query"],
-                  drop_pending_updates=False)
+                  drop_pending_updates=False, max_connections=1)  # one at a time: the Worker queue is one KV key
 
     def delete_webhook(self) -> None:
         self.call("deleteWebhook", drop_pending_updates=False)

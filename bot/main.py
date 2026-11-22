@@ -73,6 +73,7 @@ COMMANDS = [("menu", "Меню"), ("status", "План на сьогодні"), 
 AWAIT_MINUTES = 20
 LISTEN_SECONDS = 60  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
 MAX_GEN_PER_RUN = 2
+RESUME_V = 1  # bump to hand held-back posts back to the bot after a rules change
 GOAL_FOLLOWERS = 10_000  # owner 22.11.2026: the agent's own target, never mentioned in posts
 IMAGE_EVERY_DAYS = 14  # owner 22.11.2026: pictures almost never, at most one automatic picture in 2 weeks
 OAUTH_APP_ID = os.environ.get("THREADS_APP_ID", "1152144817371787")  # Koloda Threads Bot (public id)
@@ -1260,6 +1261,18 @@ class Bot:
                 self.persist()
                 continue
             lib = self.from_library(sl)
+            if lib and self.gm and sl.get("lib_judged") is None and self.time_left():
+                # owner 22.11.2026: freedom to replace a flat library post with something timely written by Gemini
+                sl["lib_judged"] = True
+                try:
+                    fresh, why = writer.library_fresh(self.gm, lib["text"], self.background())
+                except Exception as e:
+                    fresh, why = True, ""
+                    log("library judge failed:", e)
+                if not fresh:
+                    log("бібліотека: замінюю на актуальний пост:", why)
+                    self.s["library_used"].remove(lib["lib"])  # stays available for another day
+                    lib = None
             if lib:
                 made += 1
                 sl["tries"] += 1
@@ -1588,10 +1601,22 @@ class Bot:
         self.s["quiet_day"] = self.today_key()
         self.say("Тиша до кінця дня: нічого не публікую і не надсилаю чернетки. Завтра продовжу сам.")
 
+    def resume_doubtful(self) -> int:
+        """Freedom mode: posts held back for the owner go back to the bot, which rewrites them by the current rules."""
+        if not self.s.get("autopilot"):
+            return 0
+        n = 0
+        for x in self.slots():
+            if x["status"] == "sent" and x.get("owner_only") and x["kind"] not in ("now", "sell-now"):
+                x.update(status="new", draft=None, tries=0, owner_only=False, auto=False, lib_judged=None)
+                n += 1
+        return n
+
     def menu_restart(self) -> None:
         """Owner's restart button: drop half-finished modes, re-check today's plan, show the state."""
         for k in ("chat_mode", "chat_focus", "chat_pending", "await"):
             self.s.pop(k, None)
+        self.resume_doubtful()
         self.s["menu_v"] = 0
         self.ensure_menu()
         try:
@@ -1861,6 +1886,9 @@ class Bot:
             self.plan_ahead(0)
 
     def tick(self) -> None:
+        if self.s.get("resume_v") != RESUME_V:  # one-time restart after a rules update (owner 22.11.2026)
+            self.s["resume_v"] = RESUME_V
+            self.resume_doubtful()
         self.ensure_menu()
         self.flush_outbox()
         self.upgrade_plan()
@@ -1941,6 +1969,7 @@ def main(argv=None) -> int:
                 relay_mod.deploy(cf_acc, cf_tok, tg_token=tg_token, dispatch_token=net.env("DISPATCH_TOKEN"),
                                  repo=os.environ.get("GITHUB_REPOSITORY", ""), script=script, log=log)
                 s["worker_hash"] = h
+                bot.tg.set_webhook(s["relay_url"] + "/tg", relay_mod.derive(tg_token, "webhook"))
                 log("worker updated")
             except Exception as e:
                 log("worker update failed:", e)

@@ -26,8 +26,10 @@ export default {
       }
       const upd = await req.json();
       if (typeof upd.update_id === "number") {
-        await env.Q.put(`u:${String(upd.update_id).padStart(12, "0")}`, JSON.stringify(upd),
-                        { expirationTtl: 3 * 86400 });
+        // one KV key holds the whole queue: the free plan allows only 1000 "list" calls a day, which polling used up
+        const q = await readQ(env);
+        if (!q.some((u) => u.update_id === upd.update_id)) q.push(upd);
+        await env.Q.put("q", JSON.stringify(q.slice(-100)), { expirationTtl: 3 * 86400 });
         await wake(env);
         // show "друкує…" at the top of the chat while the bot starts, so the owner sees it is working
         const chat = (upd.message && upd.message.chat && upd.message.chat.id) ||
@@ -46,17 +48,16 @@ export default {
     if (!auth) return new Response("forbidden", { status: 403 });
 
     if (url.pathname === "/updates") {
-      const list = await env.Q.list({ prefix: "u:", limit: 100 });
-      const out = [];
-      for (const k of list.keys) {
-        const v = await env.Q.get(k.name);
-        if (v) out.push(JSON.parse(v));
-      }
-      return Response.json(out);
+      return Response.json(await readQ(env));
     }
     if (url.pathname === "/ack" && req.method === "POST") {
       const { ids } = await req.json();
-      for (const id of ids || []) await env.Q.delete(`u:${String(id).padStart(12, "0")}`);
+      const drop = new Set(ids || []);
+      if (drop.size) {
+        const q = await readQ(env);
+        const left = q.filter((u) => !drop.has(u.update_id));
+        if (left.length !== q.length) await env.Q.put("q", JSON.stringify(left), { expirationTtl: 3 * 86400 });
+      }
       return new Response("ok");
     }
     if (url.pathname === "/wake" && req.method === "POST") {
@@ -66,6 +67,16 @@ export default {
     return new Response("not found", { status: 404 });
   },
 };
+
+async function readQ(env) {
+  try {
+    const v = await env.Q.get("q");
+    const q = v ? JSON.parse(v) : [];
+    return Array.isArray(q) ? q : [];
+  } catch (e) {
+    return [];
+  }
+}
 
 async function typing(env, chat) {
   for (let i = 0; i < 6; i++) {          // ~30 s of "typing", the most a free Worker may keep going
