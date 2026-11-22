@@ -829,7 +829,7 @@ class Bot:
         """Meme with Ivanovych (panels + captions in meme fonts) or a cosy scene without him."""
         ip = writer.image_prompt(self.gm, text, topic=topic)
         if ip["mode"] == "meme":
-            shots = [self.images.generate(p, log=log, character=True) for p in ip["panels"]]
+            shots = [self.images.generate(p, log=log, character=True, cast=ip.get("cast")) for p in ip["panels"]]
             data = shots[0]["bytes"]
             if meme.available() and ip["captions"]:
                 data = meme.compose(ip["layout"], [x["bytes"] for x in shots], ip["captions"])

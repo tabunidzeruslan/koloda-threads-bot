@@ -396,17 +396,17 @@ def write_post(gm: Gemini, *, today: date, sell: bool, recent: list[str], last_r
 
 ILLUSTRATOR = """You are the art director of a Kyiv firewood brand's Threads. Make ONE image for the post. Two modes:
 
-"meme": the brand character Ivanovych reenacts a recognisable meme format from the list (never the original meme photo,
+"meme": brand characters from the cast (Ivanovych by default, others only when their role fits; max 2 per meme) reenact a recognisable meme format from the list (never the original meme photo,
 never real people). Use it for jokes, trends, hype, relatable pain, sarcasm. Pick the format whose structure really fits
 the joke. Captions in Ukrainian, short, punchy, modern internet humour (see humour rules), they must make sense together
-with the picture. Each panel: 1-2 English sentences describing Ivanovych's pose, face and props, positive wording.
-"scene": a cosy or informative picture WITHOUT any person (firewood, fireplace, stove, stacked wood, pellets, delivery
+with the picture. Each panel: 1-2 English sentences naming the characters by their look (not only by name), their pose, face and props, positive wording.
+"scene": a cosy or informative picture WITHOUT any person or character (firewood, fireplace, stove, stacked wood, pellets, delivery
 truck at a Kyiv-region house). Use it for calm, useful, warm posts. 1-2 English sentences, positive wording.
 
 If firewood, pellets or briquettes appear, describe them exactly as the firewood guide says.
 For a trending topic, show it only through generic props as the trend rule says.
 Return only JSON:
-{"mode": "meme", "format": "format id", "style": "modern" | "classic", "panels": ["scene for panel 1", "scene for panel 2 if the format has 2"],
+{"mode": "meme", "format": "format id", "cast": ["ivanovych"], "style": "modern" | "classic", "panels": ["scene for panel 1", "scene for panel 2 if the format has 2"],
  "captions": ["caption 1", "caption 2 if needed"], "idea": "one line in Ukrainian"}
 or {"mode": "scene", "prompt": "scene", "idea": "one line in Ukrainian"}"""
 
@@ -444,7 +444,8 @@ def image_prompt(gm: Gemini, post_text: str, topic: str = "") -> dict:
     except (OSError, ValueError):
         pass
     formats = [{k: f[k] for k in ("id", "name", "panels", "slots", "example") if k in f} for f in fm.values()]
-    rules = (f"Character: {il['character']}\nFirewood guide: {il.get('firewood', '')}\nTrend rule: {il.get('trend_rule', '')}\n"
+    cast = il.get("cast") or [{"id": "ivanovych", "name": "Ivanovych", "role": "main", "look": il["character"]}]
+    rules = (f"Cast: {json.dumps(cast, ensure_ascii=False)}\nFirewood guide: {il.get('firewood', '')}\nTrend rule: {il.get('trend_rule', '')}\n"
              f"Banned: {il['banned']}\nMeme rules: {json.dumps(mem.get('rules', []), ensure_ascii=False)}\n"
              f"Meme formats: {json.dumps(formats, ensure_ascii=False)}\n"
              f"Humour rules: {json.dumps(hum.get('principles', [])[:12], ensure_ascii=False)}")
@@ -461,8 +462,12 @@ def image_prompt(gm: Gemini, post_text: str, topic: str = "") -> dict:
         while len(panels) < n:
             panels.append(panels[-1])
         caps = [str(x).strip() for x in data.get("captions") or [] if str(x).strip()][:2]
+        ids = {c["id"] for c in cast}
+        who = [c for c in (data.get("cast") or []) if c in ids][:2] or ["ivanovych"]
+        looks = " ".join(f"{c['name']}: {c['look']}." for c in cast if c["id"] in who)
         return {"mode": "meme", "format": f["id"], "layout": layout, "captions": caps, "idea": idea or f["name"],
-                "panels": [render_prompt(p, il, character=True) for p in panels]}
+                "cast": who, "panels": [f"{p}\nCharacters: {looks}" + (f"\n{il['firewood_render']}" if WOOD_WORDS.search(p) else "") +
+                           f"\n{il['scene_render'].replace('no people, ', '')}" for p in panels]}
     prompt = str(data.get("prompt") or (data.get("panels") or [""])[0]).strip()
     if not prompt:
         raise ValueError("пустий промпт")

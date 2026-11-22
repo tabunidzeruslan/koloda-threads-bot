@@ -10,6 +10,32 @@
   "firewood": "How firewood must look (Kyiv hardwood, sold by Koloda): split logs about 30-40 cm long, quarter and half splits with a wedge-shaped cross-section, rough bark on the outer side, pale cream to light-brown split wood inside, visible growth rings and small radial cracks on the end faces. Stacked tightly in neat horizontal rows, end faces toward the viewer, a stack forms a tidy rectangular block; one cubic meter is about 1x1x1 m, often in a simple wooden pallet crate or on a pallet. Species: hornbeam (graby) has smooth grey bark and white wood; oak has thick dark furrowed bark and yellow-brown wood; ash has grey diamond-pattern bark and light wood; alder has dark bark and orange-reddish wood; acacia has deeply furrowed bark and yellow wood; pine has orange-brown flaky bark and resinous yellow wood. Dry wood: cracks on the ends, greyish tone. Burning: logs crossed in a fireplace or stove, calm orange flames. Also sold: pellets (small light cylinders in 15 kg bags), RUF briquettes (brown rectangular bricks), Pini Kay briquettes (dark hexagonal tubes with a hole), pine bark mulch.",
   "firewood_render": "Firewood shown as split hardwood logs about 35 cm long with rough bark, pale split faces, visible growth rings and small cracks on the end faces, stacked in neat tight rows.",
   "trend_rule": "For a trending topic show it only through generic props and situations everyone recognises: a football in blue-and-white or yellow-and-blue team colours, a scarf, a TV or phone showing an unreadable screen, snow, a power bank and candle for blackouts, a holiday table, and so on. Ivanovych reacts to it in his own firewood world. Never draw real people or their faces, club crests, brand logos, flags, politics, war or weapons.",
-  "usage": "Іванович тільки в мемах і трендових ситуаціях. Затишні, теплі, інформативні картинки без персонажа.",
-  "scene_render": "Stylized 3D animated movie render, soft warm light, cosy and clean composition, simple background, no people, square 1:1."
+  "usage": "Персонажі тільки в мемах і трендових ситуаціях, головний Іванович, інших додавати за потреби ролі. Затишні, теплі, інформативні картинки без персонажів.",
+  "scene_render": "Stylized 3D animated movie render, soft warm light, cosy and clean composition, simple background, no people, square 1:1.",
+  "cast": [
+    {
+      "id": "ivanovych",
+      "name": "Іванович",
+      "role": "головний мемний персонаж: дядько з досвідом, усе бачив, сарказм і спокій",
+      "look": "a stocky Ukrainian man in his late 50s with short grey hair, a big bushy grey mustache, rosy cheeks, black quilted puffer vest with orange KOLODA, orange shirt, brown cargo work trousers, dark work boots"
+    },
+    {
+      "id": "angelina",
+      "name": "Ангеліна",
+      "role": "менеджерка, приймає замовлення: ввічлива, але з тонким сарказмом; клієнти, дзвінки, «а можна дешевше?»",
+      "look": "a young woman with long straight blonde hair, orange polo shirt with a small green KOLODA logo, light blue jeans, white sneakers, leaf tattoo on her forearm, holds a notepad and a blue pen"
+    },
+    {
+      "id": "denys",
+      "name": "Денис",
+      "role": "лісоруб і грузчик: сила, бензопила, колун, доставка; простий і добрий здоровань",
+      "look": "a sturdy bearded man in his 30s with tousled brown hair, black work jacket with orange stripes and orange KOLODA, black cargo work trousers with orange piping, work gloves, dark boots, carries a chainsaw on his shoulder"
+    },
+    {
+      "id": "oleksandr",
+      "name": "Олександр",
+      "role": "технолог і контроль якості: вологомір, цифри, складометр; трохи зануда-експерт",
+      "look": "a calm man in his 40s with short greying hair, black quilted vest with orange KOLODA over a dark sweater, dark grey cargo trousers, dark boots, holds a digital wood moisture meter"
+    }
+  ]
 }

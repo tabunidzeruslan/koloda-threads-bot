@@ -43,14 +43,14 @@ class Images:
             out.append("pollinations")
         return out
 
-    def generate(self, prompt: str, log=print, character: bool = True) -> dict:
+    def generate(self, prompt: str, log=print, character: bool = True, cast: list[str] | None = None) -> dict:
         """Returns {"bytes": ..., "provider": ..., "url": public url or ""}.
         character=True draws Ivanovych from the reference images; False draws a scene without him."""
         errors = []
         for p in self.providers():
             try:
                 if p == "cloudflare":
-                    refs = self.references() if character else []
+                    refs = self.references(cast) if character else []
                     if refs:
                         try:
                             return {"bytes": self._cloudflare_ref(prompt, refs), "provider": "cloudflare-ref", "url": ""}
@@ -77,13 +77,18 @@ class Images:
         raise RuntimeError("; ".join(errors) or "нет доступных генераторов")
 
     @staticmethod
-    def references() -> list[Path]:
-        return sorted(REF_DIR.glob("*.png"))[:4] if REF_DIR.exists() else []
+    def references(cast: list[str] | None = None) -> list[Path]:
+        """Up to 4 reference images (FLUX.2 limit): full body + face for 1-2 characters."""
+        cast = [c for c in (cast or ["ivanovych"]) if (REF_DIR / c).is_dir()][:2]
+        refs: list[Path] = []
+        for c in cast:
+            files = sorted((REF_DIR / c).glob("*.png"))
+            refs += files[:2] if len(cast) == 1 else files[:1] + [f for f in files if f.name == "face.png"][:1]
+        return refs[:4]
 
     def _cloudflare_ref(self, prompt: str, refs: list[Path]) -> bytes:
-        lead = ("Use the man from the reference images as the main character: keep exactly the same face, grey hair, "
-                "bushy grey mustache, body shape and outfit (black puffer vest with orange KOLODA, orange shirt, brown "
-                "cargo trousers, dark boots). New scene: ")
+        lead = ("Use the people from the reference images as the characters: keep exactly the same faces, hair, "
+                "body shapes and outfits with the KOLODA logo. Same stylized 3D animated look. New scene: ")
         body, ctype = net.multipart(
             {"prompt": (lead + prompt)[:2000], "width": "1024", "height": "1024"},
             {f"input_image_{i}": (r.name, "image/png", r.read_bytes()) for i, r in enumerate(refs)})

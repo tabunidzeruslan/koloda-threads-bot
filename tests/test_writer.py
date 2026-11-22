@@ -94,7 +94,7 @@ class MemeTest(unittest.TestCase):
         if not meme.available():
             self.skipTest("no Pillow")
         from pathlib import Path
-        img = (Path(__file__).resolve().parent.parent / "data" / "ref" / "ivanych_full.png").read_bytes()
+        img = (Path(__file__).resolve().parent.parent / "data" / "ref" / "ivanovych" / "full.png").read_bytes()
         for layout in ("caption_above", "classic", "two_panel_vertical", "two_panel_horizontal"):
             out = meme.compose(layout, [img, img], ["Очікування: затишний вечір", "Реальність: дим"])
             self.assertTrue(out.startswith(b"\x89PNG"), layout)
@@ -105,3 +105,13 @@ class MemeTest(unittest.TestCase):
         self.assertGreaterEqual(len(fm), 20)
         for f in fm.values():
             self.assertIn(f["layout"], ("caption_above", "classic", "two_panel_vertical", "two_panel_horizontal"))
+
+
+class CastTest(unittest.TestCase):
+    def test_references_per_cast(self):
+        from bot.images import Images
+        self.assertEqual(len(Images.references(["ivanovych"])), 2)
+        two = Images.references(["ivanovych", "angelina"])
+        self.assertEqual(len(two), 4)
+        self.assertEqual({p.parent.name for p in two}, {"ivanovych", "angelina"})
+        self.assertEqual(len(Images.references(["nobody"])), 0)
