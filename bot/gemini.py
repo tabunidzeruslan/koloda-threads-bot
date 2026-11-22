@@ -58,10 +58,10 @@ class Gemini:
                     if d and d.get("data"):
                         self.image_model = model
                         return d.get("mimeType") or d.get("mime_type") or "image/png", d["data"]
-                last = RuntimeError("модель не вернула картинку")
+                last = RuntimeError("модель не повернула картинку")
             except (net.NetError, KeyError, IndexError) as e:
                 last = e
-        raise RuntimeError(f"картинка не получилась: {last}")
+        raise RuntimeError(f"картинка не вийшла: {last}")
 
     def list_models(self) -> list[str]:
         if self._models is None:
@@ -99,7 +99,7 @@ class Gemini:
         last: Exception | None = None
         models = [m for m in self.list_models() if m not in self.dead][:8]
         if not models and not self.fallback:
-            raise RuntimeError("Gemini: нет доступных моделей flash для этого ключа (или кончилась дневная квота)")
+            raise RuntimeError("Gemini: немає доступних flash-моделей для цього ключа (або скінчилася денна квота)")
         for model in models:
             for attempt in range(2):
                 try:
@@ -110,7 +110,7 @@ class Gemini:
                     if text.strip():
                         self.model = model
                         return text
-                    last = RuntimeError("пустой ответ")
+                    last = RuntimeError("порожня відповідь")
                     break
                 except net.NetError as e:
                     last = e
@@ -122,7 +122,7 @@ class Gemini:
                         continue
                     break  # 404/400/5xx -> next model
                 except (KeyError, IndexError) as e:
-                    last = RuntimeError(f"неожиданный ответ: {e}")
+                    last = RuntimeError(f"неочікувана відповідь: {e}")
                     break
         if self.fallback and not images:
             try:
@@ -132,7 +132,7 @@ class Gemini:
                 return text
             except Exception as e:
                 last = e
-        raise RuntimeError(f"Gemini не ответил: {last}")
+        raise RuntimeError(f"Gemini не відповів: {last}")
 
 
 def parse_json(text: str):

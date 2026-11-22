@@ -331,3 +331,19 @@ class SecretTests(unittest.TestCase):
         blob = f'curl "https://api.cloudflare.com/client/v4/user/tokens/verify" \\\n -H "Authorization: Bearer {tok}"'
         self.assertEqual(clean_token(blob), tok)
         self.assertEqual(clean_token(tok), tok)
+
+
+class ActivateButtonTest(unittest.TestCase):
+    def test_activate_and_pause_buttons(self):
+        from datetime import datetime
+        from bot.schedule import TZ
+        now = datetime(2026, 11, 23, 7, 0, tzinfo=TZ)
+        ups = [{"update_id": 1, "message": {"message_id": 10, "chat": {"id": 1, "type": "private"}, "text": "🟢 Активувати"}}]
+        b = make_bot(now, ups)
+        b.s["schedule_on"] = False
+        self.assertEqual(b.menu_kb()[0], ["🟢 Активувати"])
+        b.handle_updates()
+        self.assertTrue(b.s["schedule_on"])
+        self.assertEqual(b.menu_kb()[0], ["⏸ Пауза"])
+        b.on_message({"message_id": 11, "chat": {"id": 1, "type": "private"}, "text": "⏸ Пауза"})
+        self.assertFalse(b.s["schedule_on"])

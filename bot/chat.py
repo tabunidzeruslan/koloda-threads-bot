@@ -7,7 +7,7 @@ import json
 from .gemini import parse_json
 
 SYSTEM = """Ти помічник власника київської компанії Koloda (дрова, пелети, брикети). Ти керуєш Threads-ботом компанії
-і спілкуєшся з власником у Telegram. Пиши ПО-РОСІЙСЬКИ (власник так пише), коротко, по-людськи, без markdown.
+і спілкуєшся з власником у Telegram. Пиши українською, коротко, по-людськи, без markdown.
 
 Що вміє бот: 3 чернетки на день (публікація тільки після кнопки власника), продаючий пост кожен 5-й, хайп-пости
 за трендами Google Trends Україна або на тему власника, картинки з персонажем Івановичем, статистика, коментарі.
@@ -30,7 +30,7 @@ SYSTEM = """Ти помічник власника київської компа
 {"type": "remove_image"}
 {"type": "approve"}   // власник каже «публікуй», «ок, давай»
 {"type": "skip"}      // власник каже «не публікуй», «пропусти»
-{"type": "dev", "text": "що змінити в коді бота, детально російською"}       // все, чого не можна зробити правилами
+{"type": "dev", "text": "що змінити в коді бота, детально"}       // все, чого не можна зробити правилами
 Правила:
 - Якщо власник просто питає, відповідай без змін ("changes": []).
 - Не вигадуй факти про бізнес: fact_add тільки з того, що сказав власник.
@@ -63,33 +63,33 @@ def describe(c: dict, rules: list[str], facts: list[str]) -> str:
         if t == "rule_add":
             return f"➕ Правило: {c['text']}"
         if t == "rule_remove":
-            return f"➖ Убрать правило: {rules[int(c['index'])]}"
+            return f"➖ Прибрати правило: {rules[int(c['index'])]}"
         if t == "fact_add":
             return f"➕ Факт: {c['text']}"
         if t == "fact_remove":
-            return f"➖ Убрать факт: {facts[int(c['index'])]}"
+            return f"➖ Прибрати факт: {facts[int(c['index'])]}"
         if t == "setting":
-            name = {"schedule_on": "Расписание", "auto_images": "Авто-картинки", "autopilot": "Автопилот (без подтверждения)"}.get(c.get("key"), "")
-            return f"⚙️ {name}: {'вкл' if c.get('value') else 'выкл'}" if name else ""
+            name = {"schedule_on": "Розклад", "auto_images": "Авто-картинки", "autopilot": "Автопілот (без підтвердження)"}.get(c.get("key"), "")
+            return f"⚙️ {name}: {'увімк' if c.get('value') else 'вимк'}" if name else ""
         if t == "draft":
-            return {"post": "✍️ Сделать черновик поста", "sell": "💰 Сделать продающий черновик",
-                    "hype": f"🔥 Хайп-черновик: {c.get('topic', '')}"}.get(c.get("kind"), "")
+            return {"post": "✍️ Зробити чернетку поста", "sell": "💰 Зробити продаючу чернетку",
+                    "hype": f"🔥 Хайп-чернетка: {c.get('topic', '')}"}.get(c.get("kind"), "")
         if t == "draw":
-            return f"🎨 Нарисовать: {c.get('topic', '')}"
+            return f"🎨 Намалювати: {c.get('topic', '')}"
         if t == "plan":
-            return f"📆 План на {'завтра' if int(c.get('days', 1)) == 1 else 'послезавтра'}"
+            return f"📆 План на {'завтра' if int(c.get('days', 1)) == 1 else 'післязавтра'}"
         if t == "edit_text":
-            return f"✏️ Новый текст: {c.get('text', '')}"
+            return f"✏️ Новий текст: {c.get('text', '')}"
         if t == "redraw":
-            return f"🎨 Перерисовать: {c.get('hint', '')}"
+            return f"🎨 Перемалювати: {c.get('hint', '')}"
         if t == "remove_image":
-            return "🗑 Убрать картинку"
+            return "🗑 Прибрати картинку"
         if t == "approve":
-            return "✅ Опубликовать"
+            return "✅ Опублікувати"
         if t == "skip":
-            return "⏭ Не публиковать"
+            return "⏭ Не публікувати"
         if t == "dev":
-            return f"🛠 Задача разработчику: {c.get('text', '')}"
+            return f"🛠 Задача розробнику: {c.get('text', '')}"
     except (KeyError, IndexError, ValueError, TypeError):
         return ""
     return ""

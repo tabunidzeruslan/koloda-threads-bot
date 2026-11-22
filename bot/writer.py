@@ -464,6 +464,64 @@ def render_prompt(scene: str, il: dict | None = None, character: bool = True) ->
     return f"{scene.strip()}{wood}\n{tail}"
 
 
+def image_guide() -> dict:
+    try:
+        return load("image_guide.json")
+    except (OSError, ValueError):
+        return {}
+
+
+IMAGE_DOCTOR = """Ти арт-директор і майстер промптів для генератора картинок бренду Koloda. Власник описує, що не так з картинкою.
+Перепиши запит так, щоб наступна генерація була ідеальною: врахуй, як працює генератор (гайд), чекліст дров, персонажів
+і побажання власника. Пиши промпти англійською, тільки позитивні формулювання, без списків заборон, без тексту в сцені.
+Підписи мему українською, дотепні, з поворотом у кінці (можна змінити, якщо власник просить або вони слабкі).
+Відповідь тільки JSON: {"mode": "meme"|"scene", "format": "id формату мему або порожньо", "cast": ["ivanovych"],
+"style": "modern"|"classic", "panels": ["англ. промпт панелі"], "prompt": "англ. промпт сцени без людей (для scene)",
+"captions": ["підпис"], "explain": "коротко українською, що саме виправив і чому"}"""
+
+
+def fix_image_prompt(gm: Gemini, *, post_text: str, previous: dict, complaint: str) -> dict:
+    """The owner says what is wrong with a picture; returns a corrected image plan in image_prompt's format."""
+    il = load("illustration.json")
+    g = image_guide()
+    cast = il.get("cast") or []
+    fm = meme_formats()
+    ctx = (f"Гайд генератора: {json.dumps(g, ensure_ascii=False)}\nПерсонажі: {json.dumps(cast, ensure_ascii=False)}\n"
+           f"Формати мемів: {json.dumps([{k: f[k] for k in ('id', 'name', 'panels')} for f in fm.values()], ensure_ascii=False)}\n"
+           f"Пост: {post_text}\nПопередній запит: {json.dumps(previous, ensure_ascii=False)}\n"
+           f"Що не так (власник): {complaint}")
+    data = parse_json(gm.generate(ctx, system=IMAGE_DOCTOR, json_mode=True, temperature=0.5))
+    return plan_from(data, il, fm, cast, explain=str((data or {}).get("explain", ""))[:300])
+
+
+def plan_from(data: dict, il: dict, fm: dict, cast: list, idea: str = "", explain: str = "") -> dict:
+    data = data if isinstance(data, dict) else {}
+    if data.get("mode") == "meme" and data.get("format") in fm and data.get("panels"):
+        f = fm[data["format"]]
+        layout = f.get("layout", "caption_above")
+        if layout == "caption_above" and data.get("style") == "classic":
+            layout = "classic"
+        n = 2 if layout.startswith("two_panel") else 1
+        raw = [str(x) for x in data["panels"]][:n]
+        while len(raw) < n:
+            raw.append(raw[-1])
+        caps = [str(x).strip() for x in data.get("captions") or [] if str(x).strip()][:2]
+        ids = {c["id"] for c in cast}
+        who = [c for c in (data.get("cast") or []) if c in ids][:2] or ["ivanovych"]
+        looks = " ".join(f"{c['name']}: {c['look']}." for c in cast if c["id"] in who)
+        panels = [f"{p}\nCharacters: {looks}" + (f"\n{il['firewood_render']}" if WOOD_WORDS.search(p) else "") +
+                  f"\n{il['scene_render'].replace('no people, ', '')}" for p in raw]
+        return {"mode": "meme", "format": f["id"], "layout": layout, "captions": caps, "cast": who,
+                "idea": idea or explain or f["name"], "explain": explain, "panels": panels,
+                "source": {"mode": "meme", "format": f["id"], "cast": who, "style": data.get("style"),
+                           "panels": raw, "captions": caps}}
+    prompt = str(data.get("prompt") or (data.get("panels") or [""])[0]).strip()
+    if not prompt:
+        raise ValueError("пустий промпт")
+    return {"mode": "scene", "prompt": render_prompt(prompt, il, character=False), "idea": idea or explain,
+            "explain": explain, "source": {"mode": "scene", "prompt": prompt}}
+
+
 def meme_formats() -> dict:
     try:
         return {f["id"]: f for f in load("memes.json")["formats"]}
@@ -489,32 +547,13 @@ def image_prompt(gm: Gemini, post_text: str, topic: str = "", hint: str = "") ->
     rules = (f"Cast: {json.dumps(cast, ensure_ascii=False)}\nFirewood guide: {il.get('firewood', '')}\nTrend rule: {il.get('trend_rule', '')}\n"
              f"Banned: {il['banned']}\nMeme rules: {json.dumps(mem.get('rules', []), ensure_ascii=False)}\n"
              f"Meme formats: {json.dumps(formats, ensure_ascii=False)}\n"
-             f"Humour rules: {json.dumps(hum.get('principles', [])[:12], ensure_ascii=False)}")
+             f"Humour rules: {json.dumps(hum.get('principles', [])[:12], ensure_ascii=False)}\n"
+             f"Image generator guide: {json.dumps(image_guide(), ensure_ascii=False)}")
     trend = f"\n\nTrending topic behind the post: {topic}. Prefer a meme." if topic else ""
     if hint:
         trend += f"\n\nOWNER'S WISH for this image (follow it): {hint}"
     data = parse_json(gm.generate(f"{rules}{trend}\n\nPost:\n{post_text}", system=ILLUSTRATOR, json_mode=True, temperature=0.9))
-    idea = str(data.get("idea", ""))[:200]
-    if data.get("mode") == "meme" and data.get("format") in fm and data.get("panels"):
-        f = fm[data["format"]]
-        layout = f.get("layout", "caption_above")
-        if layout == "caption_above" and data.get("style") == "classic":
-            layout = "classic"
-        n = 2 if layout.startswith("two_panel") else 1
-        panels = [str(x) for x in data["panels"]][:n]
-        while len(panels) < n:
-            panels.append(panels[-1])
-        caps = [str(x).strip() for x in data.get("captions") or [] if str(x).strip()][:2]
-        ids = {c["id"] for c in cast}
-        who = [c for c in (data.get("cast") or []) if c in ids][:2] or ["ivanovych"]
-        looks = " ".join(f"{c['name']}: {c['look']}." for c in cast if c["id"] in who)
-        return {"mode": "meme", "format": f["id"], "layout": layout, "captions": caps, "idea": idea or f["name"],
-                "cast": who, "panels": [f"{p}\nCharacters: {looks}" + (f"\n{il['firewood_render']}" if WOOD_WORDS.search(p) else "") +
-                           f"\n{il['scene_render'].replace('no people, ', '')}" for p in panels]}
-    prompt = str(data.get("prompt") or (data.get("panels") or [""])[0]).strip()
-    if not prompt:
-        raise ValueError("пустий промпт")
-    return {"mode": "scene", "prompt": render_prompt(prompt, il, character=False), "idea": idea}
+    return plan_from(data, il, fm, cast, idea=str((data or {}).get("idea", ""))[:200])
 
 
 IMAGE_JUDGE = """Ти арт-директор Threads-акаунта. Більшість постів у Threads краще працюють БЕЗ картинки: текст сам по собі.

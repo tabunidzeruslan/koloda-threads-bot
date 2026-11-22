@@ -26,7 +26,7 @@ class CFText:
                 if text:
                     self.model = model
                     return text
-                last = RuntimeError("пустой ответ")
+                last = RuntimeError("порожня відповідь")
             except Exception as e:  # next model
                 last = e
-        raise RuntimeError(f"Cloudflare AI не ответил: {net.scrub(str(last))[:200]}")
+        raise RuntimeError(f"Cloudflare AI не відповів: {net.scrub(str(last))[:200]}")

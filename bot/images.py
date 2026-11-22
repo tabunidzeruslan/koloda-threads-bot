@@ -74,7 +74,7 @@ class Images:
             except Exception as e:
                 errors.append(f"{p}: {net.scrub(str(e))[:120]}")
                 log("image provider failed:", errors[-1])
-        raise RuntimeError("; ".join(errors) or "нет доступных генераторов")
+        raise RuntimeError("; ".join(errors) or "немає доступних генераторів")
 
     @staticmethod
     def references(cast: list[str] | None = None) -> list[Path]:
@@ -96,7 +96,7 @@ class Images:
                               body, ctype, timeout=180, headers={"Authorization": f"Bearer {self.cf_token}"})
         img = (res.get("result") or {}).get("image") or res.get("image")
         if not img:
-            raise RuntimeError(f"нет картинки в ответе: {str(res)[:150]}")
+            raise RuntimeError(f"немає картинки у відповіді: {str(res)[:150]}")
         return base64.b64decode(img)
 
     def _cloudflare(self, prompt: str) -> bytes:
@@ -119,5 +119,5 @@ def _get(url: str, timeout: float) -> bytes:
     with urlopen(Request(url, headers={"User-Agent": "koloda-threads-bot/1.0"}), timeout=timeout) as r:
         data = r.read()
     if len(data) < 5000:
-        raise RuntimeError("слишком маленький ответ, не картинка")
+        raise RuntimeError("надто мала відповідь, не картинка")
     return data
