@@ -27,6 +27,7 @@ STATUS_UA = {"new": "чекає чернетки", "sent": "чекає вашо�
 HELP = ("Меню внизу чату:\n"
         "План на сьогодні: пости на сьогодні, час, що вже схвалено. Там же можна схвалити все одним натиском\n"
         "Агент: спитати чи обговорити що завгодно, дати боту нове правило\n"
+        "🔄: перезапуск, якщо бот завис або відповідає не те\n"
         "Активувати / Пауза: увімкнути або зупинити публікації\n"
         "Повна свобода / Стоп свободи: бот сам планує і публікує, пише вам тільки коли сумнівається, з 10:00 до 18:00\n\n"
         "Можна писати словами:\n"
@@ -36,13 +37,13 @@ HELP = ("Меню внизу чату:\n"
         "Під чернеткою: Опублікувати, Обговорити, Інший текст, Пропустити. "
         "Щоб виправити текст, дайте відповідь (Reply) на чернетку своїм текстом.")
 # owner asked (22.11.2026) for a minimal menu; the other actions still work by plain words (статистика, хайп, чат…)
-MENU = [["План на сьогодні", "Агент"]]
-MENU_VERSION = 10
+MENU = [["План на сьогодні", "Агент", "🔄"]]
+MENU_VERSION = 11
 CHAT_IDLE_MINUTES = 30
 MENU_ACTIONS = {"План на сьогодні": "menu_plan", "📅 План на сьогодні": "menu_plan", "📅 План": "menu_plan", "📊 Статистика": "menu_stats", "✍️ Пост зараз": "menu_post",
                 "🔥 Хайп": "menu_hype", "🎨 Картинка": "menu_draw", "💬 Коментарі": "menu_comments",
                 "⚙️ Налаштування": "menu_settings", "❓ Допомога": "menu_help", "🧠 Чат з ботом": "menu_chat",
-                "🟢 Активувати": "menu_on", "⏸ Пауза": "menu_off", "Активувати": "menu_on", "Пауза": "menu_off", "Агент": "menu_chat"}
+                "🟢 Активувати": "menu_on", "⏸ Пауза": "menu_off", "Активувати": "menu_on", "Пауза": "menu_off", "Агент": "menu_chat", "🔄": "menu_restart"}
 WORD_ACTIONS = {  # plain words, Russian or Ukrainian, without the emoji
     "план": "menu_plan", "план на сьогодні": "menu_plan", "план на сегодня": "menu_plan", "статистика": "menu_stats", "стата": "menu_stats", "пост": "menu_post", "пост зараз": "menu_post",
     "пост сейчас": "menu_post", "хайп": "menu_hype", "тренды": "menu_hype", "тренди": "menu_hype", "картинка": "menu_draw",
@@ -1526,6 +1527,22 @@ class Bot:
         self.s["posts"] = self.s["posts"][-120:]
         if sl.get("msg_id") and self.tg and self.owner:
             self.tg.edit(self.owner, sl["msg_id"], f"🟢 Опубліковано {res.get('permalink', '')}\n\n{text}")
+
+    def menu_quiet(self) -> None:
+        self.s["quiet_day"] = self.today_key()
+        self.say("Тиша до кінця дня: нічого не публікую і не надсилаю чернетки. Завтра продовжу сам.")
+
+    def menu_restart(self) -> None:
+        """Owner's restart button: drop half-finished modes, re-check today's plan, show the state."""
+        for k in ("chat_mode", "chat_focus", "chat_pending", "await"):
+            self.s.pop(k, None)
+        self.s["menu_v"] = 0
+        self.ensure_menu()
+        try:
+            self.plan_today()
+        except Exception as e:
+            log("restart plan:", e)
+        self.say("Перезапустив. Зараз так:\n" + self.status_text(), keyboard=self.menu_kb())
 
     # ---------- self-learning
     def collect_metrics(self) -> None:

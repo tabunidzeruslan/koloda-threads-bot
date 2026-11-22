@@ -551,3 +551,17 @@ class OAuthTests(unittest.TestCase):
         self.assertEqual(b.threads_token(), "NEWTOKEN_abcdefgh123")
         b.tg.delete.assert_called()
         self.assertTrue(any("threads_keyword_search" in str(x) for x in b.tg.sent))
+
+
+class RestartTests(unittest.TestCase):
+    def test_restart_button(self):
+        b = make_bot(kyiv(11))
+        b.s["chat_mode"] = kyiv(11).isoformat()
+        b.owner_turn(b.on_message, {"message_id": 3, "chat": {"id": 1, "type": "private"}, "text": "🔄"})
+        self.assertNotIn("chat_mode", b.s)
+        self.assertTrue(any("Перезапустив" in str(x) for x in b.tg.sent))
+
+    def test_quiet_word(self):
+        b = make_bot(kyiv(11))
+        b.owner_turn(b.on_message, {"message_id": 4, "chat": {"id": 1, "type": "private"}, "text": "тиша"})
+        self.assertEqual(b.s["quiet_day"], b.today_key())
