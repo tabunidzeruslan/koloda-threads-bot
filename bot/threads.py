@@ -53,8 +53,17 @@ class Threads:
         time.sleep(wait)
         return {"id": self._post("me/threads_publish", creation_id=container)["id"]}
 
-    def publish_text(self, text: str, wait: float = 4.0) -> dict:
-        container = self._post("me/threads", media_type="TEXT", text=text)["id"]
+    def _container(self, tag: str = "", **fields) -> str:
+        """Create a media container; a topic tag helps Threads show the post to people who follow that topic."""
+        if tag:
+            try:
+                return self._post("me/threads", topic_tag=tag[:50], **fields)["id"]
+            except net.NetError:
+                pass  # tag rejected: publish without it
+        return self._post("me/threads", **fields)["id"]
+
+    def publish_text(self, text: str, wait: float = 4.0, tag: str = "") -> dict:
+        container = self._container(tag, media_type="TEXT", text=text)
         time.sleep(wait)
         post_id = self._post("me/threads_publish", creation_id=container)["id"]
         link = ""
@@ -64,8 +73,8 @@ class Threads:
             pass
         return {"id": post_id, "permalink": link}
 
-    def publish_image(self, text: str, image_url: str) -> dict:
-        container = self._post("me/threads", media_type="IMAGE", image_url=image_url, text=text)["id"]
+    def publish_image(self, text: str, image_url: str, tag: str = "") -> dict:
+        container = self._container(tag, media_type="IMAGE", image_url=image_url, text=text)
         for _ in range(12):  # images need processing on Meta's side
             time.sleep(5)
             st = self._get(container, fields="status,error_message")

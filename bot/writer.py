@@ -187,6 +187,14 @@ def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[st
         lines.append("Контекст дня (можна використати, не обовʼязково): " + background)
     if role:
         lines.append("РОЛЬ ЦЬОГО ПОСТА В ПЛАНІ ДНЯ (усі варіанти мають їй відповідати): " + role)
+    try:
+        reach = load("daily_plan.json").get("reach", {})
+        if reach:
+            lines.append("ЯК ПОТРАПИТИ В РЕКОМЕНДАЦІЇ THREADS (виконуй): " + json.dumps(reach.get("post_rules", []), ensure_ascii=False))
+            lines.append("Тег теми (topic tag): обери 1 короткий тег українською, за яким люди шукають тему, без #. Приклади: "
+                         + json.dumps(reach.get("tag_examples", []), ensure_ascii=False))
+    except (OSError, ValueError):
+        pass
     if topic:
         lines.append("ГОЛОВНА ТЕМА всіх 4 варіантів (інфопривід, реакція на хайп): " + topic +
                      "\nЗроби дотепну реакцію з ЛОГІЧНИМ містком до дров, тепла, дому чи чесного обʼєму: спільне почуття, "
@@ -201,7 +209,7 @@ def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[st
         lines.append("Напиши 4 різні варіанти продаючого поста з різними кутами (швидкість, чесний об'єм, сухі дрова, зручність).")
     elif not topic:
         lines.append("Напиши 4 варіанти, по одному на кожну рубрику: " + json.dumps(rubrics, ensure_ascii=False))
-    lines.append('Відповідь тільки JSON: {"variants": [{"rubric": "...", "text": "..."}]}')
+    lines.append('Відповідь тільки JSON: {"variants": [{"rubric": "...", "text": "...", "tag": "тег теми"}]}')
     return "\n".join(lines)
 
 
@@ -213,7 +221,8 @@ def generate_variants(gm: Gemini, *, today: date, rubrics: list[str], sell: bool
     out = []
     for v in data.get("variants", []) if isinstance(data, dict) else []:
         if isinstance(v, dict) and isinstance(v.get("text"), str):
-            out.append({"rubric": SELL if sell else ("Хайп" if topic else str(v.get("rubric", ""))), "text": v["text"].strip()})
+            out.append({"rubric": SELL if sell else ("Хайп" if topic else str(v.get("rubric", ""))), "text": v["text"].strip(),
+                        "tag": str(v.get("tag") or "").strip().lstrip("#")[:40]})
     return out
 
 
@@ -433,7 +442,8 @@ def write_post(gm: Gemini, *, today: date, sell: bool, recent: list[str], last_r
             continue
         if text != v["text"] and check(text, sell=sell, today=today, recent=recent, examples=examples):
             continue
-        return {"text": text, "rubric": v["rubric"], "score": sc, "why": why, "fact": status, "fact_note": note}
+        return {"text": text, "rubric": v["rubric"], "score": sc, "why": why, "fact": status, "fact_note": note,
+                "tag": v.get("tag", "")}
     return None
 
 

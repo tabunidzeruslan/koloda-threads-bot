@@ -67,9 +67,10 @@ LISTEN_SECONDS = 60  # after a scheduled run the bot keeps listening to Telegram
 MAX_GEN_PER_RUN = 2
 MAX_AUTO_IMAGES_PER_DAY = 1  # owner: at most one picture a day for all posts together, only if really needed
 MAX_HYPE_IMAGES_PER_DAY = 1  # plus one for a trend post
-TREND_HOURS = (10, 13, 17)   # Kyiv hours when the bot looks at Google Trends Ukraine
+TREND_HOURS = (13, 17)  # extra checks if the morning scan found nothing safe
+HYPE_AT = 12 * 60 + 10  # trend post of the day goes out between the morning and the midday post   # Kyiv hours when the bot looks at Google Trends Ukraine
 MAX_HYPE_PER_DAY = 1  # 4 planned posts + 1 trend post = up to 5 a day
-PLAN_VERSION = 3
+PLAN_VERSION = 4
 BRIEF_HOUR = 10  # owner gets the day plan for approval at 10:00 Kyiv
 HYPE_SPACING_MIN = 30
 TIME_BUDGET = 6 * 60
@@ -137,7 +138,14 @@ STRATEGY_MSG = ("📋 Нова стратегія з {date}:\n\n"
                 "• 13:00–14:00 Спір дня: гостра думка або вибір А/Б, щоб писали в коментарях\n"
                 "• 16:00–17:00 Побут і гумор: київська або дачна ситуація, мем\n"
                 "• 19:00–20:30 Вечірній продаж: одна причина замовити зараз + контакт\n"
-                "• 🔥 Хайп: якщо Київ про щось гуде, реакція з логічним містком до тепла\n\n"
+                "• 12:10 🔥 Тренд дня: о 7:00 дивлюся, про що говорять Київ і Україна, і роблю реакцію з логічним містком до тепла\n\n"
+                "Як потрапляти в рекомендації Threads:\n"
+                "• перший рядок чіпляє, пост 1–4 рядки, одна думка\n"
+                "• у кінці питання або вибір, щоб писали коментарі (це головний сигнал)\n"
+                "• тег теми до кожного поста (Дрова, Київ, Опалення…), щоб бачили не тільки підписники\n"
+                "• гарячі теми дня вплітаю і в звичайні пости, якщо місток смішний і логічний\n"
+                "• без посилань і хештегів у тексті, контакт телефоном або в дірект\n"
+                "• на коментарі відповідаємо в першу годину: я готую відповідь, ви тиснете «Відповісти»\n\n"
                 "Картинка максимум одна на день і тільки якщо дуже треба. Продаючий завжди без картинки.\n\n"
                 "Щодня о 10:00 за Києвом надсилаю план дня на схвалення. Ваша дія: «📅 План» → «✅ Схвалити всі». "
                 "Якщо щось не так: натисніть пост → «💬 Обговорити» → напишіть що змінити.")
@@ -1070,7 +1078,13 @@ class Bot:
         sl = self.slots()
         if not sl or any(x["status"] == "new" for x in sl):
             return
+        if (self.s.get("day_trends") or {}).get("day") != key and self.gm and self.now.hour < BRIEF_HOUR + 1:
+            return  # trends of the day first, then the plan
         self.s["brief_day"] = key
+        topics = (self.s.get("day_trends") or {}).get("topics") or []
+        if topics:
+            self.say("📰 Про що сьогодні говорять Київ і Україна (бот враховує це в постах):\n"
+                     + "\n".join(f"{i + 1}. {t['title']}" for i, t in enumerate(topics[:5])))
         self.say("☀️ Доброго ранку! Ось що сьогодні виходить. Усе гаразд? Тисніть «✅ Схвалити всі»."
                  + (" Автопілот увімкнено: добрі пости вийдуть самі." if self.s.get("autopilot") else ""))
         self.menu_plan()
@@ -1113,7 +1127,37 @@ class Bot:
             self.persist()
 
     def background(self) -> str:
-        return " ".join(x for x in (trends.weather_line(self.s.get("weather")), trends.calendar_note(self.now.date())) if x)
+        parts = [trends.weather_line(self.s.get("weather")), trends.calendar_note(self.now.date())]
+        dt = self.s.get("day_trends") or {}
+        if dt.get("day") == self.today_key() and dt.get("topics"):
+            parts.append("Про що сьогодні говорять Київ і Україна (зачепись, тільки якщо місток до дров логічний і смішний): "
+                         + "; ".join(f"{t['title']} (кут: {t['angle']})" for t in dt["topics"][:5]))
+        return " ".join(x for x in parts if x)
+
+    def morning_trends(self) -> None:
+        """Before the 10:00 plan: what Kyiv and Ukraine talk about today, plus one trend post scheduled for midday."""
+        key = self.today_key()
+        if (not self.gm or not self.s["schedule_on"] or self.s.get("paused_reason") or self.quiet()
+                or self.now.hour < 7 or (self.s.get("day_trends") or {}).get("day") == key or not self.time_left()):
+            return
+        self.s["day_trends"] = {"day": key, "topics": []}
+        try:
+            items = trends.signals(log=log)
+            self.s["day_trends"]["topics"] = writer.digest(self.gm, items)
+        except Exception as e:
+            log("morning trends failed:", e)
+            return
+        self.persist()
+        if sum(1 for x in self.slots() if x["kind"] == "hype") >= MAX_HYPE_PER_DAY or not self.time_left():
+            return
+        try:
+            pick = writer.pick_trend(self.gm, items, self.s.get("trends_used", []))
+        except Exception as e:
+            log("trend pick failed:", e)
+            return
+        if pick:
+            self.s["trends_used"] = (self.s.get("trends_used", []) + [pick["title"]])[-60:]
+            self.make_hype(pick["topic"], url=pick["url"], source="тренд дня", at=HYPE_AT)
 
     def write(self, sell: bool, topic: str = "", images: list | None = None, sl: dict | None = None) -> dict | None:
         try:
@@ -1273,6 +1317,7 @@ class Bot:
                 if (p.get("text") or "").strip() == text.strip():
                     raise RuntimeError("такий пост уже є в Threads, повтор не публікую")
             img = sl["draft"].get("image")
+            tag = {"tag": sl["draft"]["tag"]} if sl["draft"].get("tag") else {}
             if img:
                 url = ""
                 if self.images and self.images.can_host and img.get("file_id"):
@@ -1280,12 +1325,12 @@ class Bot:
                 elif img.get("url"):
                     url = img["url"]
                 if url:
-                    res = self.th.publish_image(text, url)
+                    res = self.th.publish_image(text, url, **tag)
                 else:
                     self.say("⚠️ Немає сховища для картинки, публікую пост без неї.")
-                    res = self.th.publish_text(text)
+                    res = self.th.publish_text(text, **tag)
             else:
-                res = self.th.publish_text(text)
+                res = self.th.publish_text(text, **tag)
         except Exception as e:
             sl["status"] = "failed"
             self.s["fail_streak"] += 1
@@ -1306,13 +1351,13 @@ class Bot:
 
     # ---------- hype
     def make_hype(self, topic: str, *, url: str, images: list | None = None, source: str = "",
-                  want_image: bool = False) -> bool:
+                  want_image: bool = False, at: int | None = None) -> bool:
         if not self.gm:
             return False
         key = self.today_key()
         day = self.s["days"].setdefault(key, {"slots": []})
         n = sum(1 for x in day["slots"] if x["kind"] == "hype")
-        sl = {"id": f"{key[5:7]}{key[8:]}-h{n}", "at": minutes_of(self.now), "kind": "hype", "status": "new",
+        sl = {"id": f"{key[5:7]}{key[8:]}-h{n}", "at": at if at is not None else minutes_of(self.now), "kind": "hype", "status": "new",
               "tries": 1, "rejects": 0, "v": 0, "draft": None, "msg_id": None, "topic": topic[:600],
               "url": url, "source": source, "want_image": want_image}
         post = self.write(False, topic=sl["topic"], images=images)
@@ -1456,6 +1501,10 @@ class Bot:
         """Owner asked on 22.11.2026: start posting from the next morning, 4-5 posts a day."""
         if self.s.get("plan_v", 0) >= PLAN_VERSION:
             return
+        if self.s.get("plan_v", 0) >= 3:  # only the strategy text changed: keep today's plan
+            self.s["plan_v"] = PLAN_VERSION
+            self.say(STRATEGY_MSG.format(date=self.now.strftime("%d.%m")))
+            return
         self.s["plan_v"] = PLAN_VERSION
         self.s["schedule_on"], self.s["paused_reason"] = True, None
         for day in [d for d in self.s["days"] if d >= self.today_key()]:  # rebuild old 3-post plans
@@ -1478,6 +1527,7 @@ class Bot:
         self.plan_today()
         self.publish_due()
         self.draft_pending()
+        self.morning_trends()
         self.morning_brief()
         self.check_comments()
         self.check_trends()

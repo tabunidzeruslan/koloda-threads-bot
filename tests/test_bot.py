@@ -5,7 +5,7 @@ import unittest
 from datetime import date, datetime
 from unittest import mock
 
-from bot import crypto, state as st, writer
+from bot import crypto, net, state as st, writer
 from bot.gemini import parse_json, rank_models
 from bot.main import Bot
 from bot.schedule import TZ, make_slots
@@ -58,10 +58,11 @@ GOOD = "Дуб чи граб? Знаю родини, де це питання г
 def make_bot(now, updates=None, s=None):
     s = s or st.load("/nonexistent")
     s["owner_chat_id"] = 1
-    s.setdefault("plan_v", 3)
+    s.setdefault("plan_v", 4)
     b = Bot(s, tg=FakeTG(updates), gm=mock.Mock(model="m"), threads_secret="tok_secret_123",
             enc_key="k", now=now, rnd=random.Random(1))
     b.th = FakeThreads()
+    b.s.setdefault("day_trends", {"day": b.today_key(), "topics": []})  # no network in tests
     return b
 
 
@@ -321,6 +322,38 @@ class PlanTests(unittest.TestCase):
         self.assertEqual([x["status"] for x in b.slots()][:2], ["approved", "approved"])
         b.on_menu(f"show|{b.slots()[0]['id']}")
         self.assertEqual(b.slots()[0]["status"], "approved")
+
+
+class TrendPlanTests(unittest.TestCase):
+    def test_morning_trends_schedule_hype_and_feed_posts(self):
+        b = make_bot(kyiv(7, 10))
+        b.s["schedule_on"] = True
+        b.s.pop("day_trends")
+        topics = [{"title": "Перший сніг у Києві", "angle": "сухі дрова до морозу", "heat": 5, "why": "", "source": "", "url": ""}]
+        post = {"text": GOOD, "rubric": "Хайп", "score": 8, "fact": "ok", "fact_note": None, "tag": "Зима"}
+        with mock.patch("bot.trends.signals", return_value=[{"title": "сніг"}]), \
+             mock.patch("bot.writer.digest", return_value=topics), \
+             mock.patch("bot.writer.pick_trend", return_value={"title": "сніг", "topic": "Перший сніг", "url": ""}), \
+             mock.patch("bot.writer.write_post", return_value=post), \
+             mock.patch("bot.writer.needs_image", return_value=(False, "")):
+            b.morning_trends()
+        hype = [x for x in b.slots() if x["kind"] == "hype"]
+        self.assertEqual(len(hype), 1)
+        self.assertEqual(hype[0]["at"], 12 * 60 + 10)
+        self.assertIn("Перший сніг у Києві", b.background())
+
+    def test_topic_tag_fallback(self):
+        from bot.threads import Threads
+        t = Threads("tok")
+        calls = []
+        def post(path, **kw):
+            calls.append(kw)
+            if "topic_tag" in kw:
+                raise net.NetError(400, "bad tag")
+            return {"id": "c1"}
+        t._post = post
+        self.assertEqual(t._container("Дрова", media_type="TEXT", text="x"), "c1")
+        self.assertEqual(len(calls), 2)
 
 
 class ImageTests(unittest.TestCase):
