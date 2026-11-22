@@ -58,7 +58,7 @@ GOOD = "Дуб чи граб? Знаю родини, де це питання г
 def make_bot(now, updates=None, s=None):
     s = s or st.load("/nonexistent")
     s["owner_chat_id"] = 1
-    s.setdefault("plan_v", 4)
+    s.setdefault("plan_v", 5)
     b = Bot(s, tg=FakeTG(updates), gm=mock.Mock(model="m"), threads_secret="tok_secret_123",
             enc_key="k", now=now, rnd=random.Random(1))
     b.th = FakeThreads()

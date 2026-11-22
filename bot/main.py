@@ -82,7 +82,7 @@ MAX_HYPE_IMAGES_PER_DAY = 1  # plus one for a trend post
 TREND_HOURS = (13, 17)  # extra checks if the morning scan found nothing safe
 HYPE_AT = 12 * 60 + 10  # trend post of the day goes out between the morning and the midday post   # Kyiv hours when the bot looks at Google Trends Ukraine
 MAX_HYPE_PER_DAY = 1  # 4 planned posts + 1 trend post = up to 5 a day
-PLAN_VERSION = 4
+PLAN_VERSION = 5
 BRIEF_HOUR = 10  # owner gets the day plan for approval at 10:00 Kyiv
 HYPE_SPACING_MIN = 30
 TIME_BUDGET = 6 * 60
@@ -1634,6 +1634,15 @@ class Bot:
     def upgrade_plan(self) -> None:
         """Owner asked on 22.11.2026: start posting from the next morning, 4-5 posts a day."""
         if self.s.get("plan_v", 0) >= PLAN_VERSION:
+            return
+        if self.s.get("plan_v", 0) == 4:  # new writing rules: rewrite drafts that are not out yet
+            self.s["plan_v"] = PLAN_VERSION
+            for k in [d for d in self.s["days"] if d >= self.today_key()]:
+                for x in self.s["days"][k]["slots"]:
+                    if x["status"] in ("sent", "approved", "new") and x.get("draft") and x["draft"].get("fact") != "owner":
+                        if x.get("msg_id") and self.tg and self.owner:
+                            self.tg.edit(self.owner, x["msg_id"], "♻️ Переписую за новими правилами, нова версія буде в «План на сьогодні».")
+                        x.update(status="new", draft=None, msg_id=None, tries=0, auto=False)
             return
         if self.s.get("plan_v", 0) >= 3:  # only the strategy text changed: keep today's plan
             self.s["plan_v"] = PLAN_VERSION
