@@ -1576,6 +1576,13 @@ class Bot:
             for p in found[:8]:
                 lines.append(f"\n@{p.get('username', '?')}: {(p.get('text') or '').strip()[:160]}\n{p.get('permalink', '')}")
             self.say("\n".join(lines), important=True)
+        if force and not found and not own and not err:
+            try:  # before Meta approval only our own posts are searchable: show one as an example
+                own = [p for p in self.th.keyword_search("дрова", limit=5) if (p.get("username") or "").lower() == me]
+            except Exception:
+                own = []
+        if found:
+            pass
         elif force and own and not err:
             p = own[0]
             self.say("Пошук працює. Поки Meta не схвалила доступ, видно тільки наші пости. Так виглядатиме знахідка:\n\n"
