@@ -1584,7 +1584,10 @@ def main(argv=None) -> int:
                 time.sleep(6)
             else:
                 raise RuntimeError(f"Worker не відповідає на /health ({r.last_error})")
-            bot.handle_updates()  # take what is waiting in getUpdates before switching to the webhook
+            if s.get("relay_url"):  # already on the webhook: take queued presses from the Worker
+                bot.relay = relay_mod.Relay(s["relay_url"], tg_token)
+            bot.handle_updates()  # take what is waiting before (re)setting the webhook
+            bot.relay = None
             bot.tg.set_webhook(u + "/tg", relay_mod.derive(tg_token, "webhook"))
             s["relay_url"] = u
             bot.say("⚡ Швидкі відповіді увімкнено: тепер бот прокидається одразу після вашого повідомлення "
