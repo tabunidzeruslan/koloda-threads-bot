@@ -278,23 +278,31 @@ def write_post(gm: Gemini, *, today: date, sell: bool, recent: list[str], last_r
     return None
 
 
-ILLUSTRATOR = """You design one illustration for a Threads post of a Kyiv firewood brand. Invent ONE fresh absurd visual
-metaphor for the post's main idea, in which the character performs the core action (not decoration).
+ILLUSTRATOR = """You design one illustration for a Threads post of a Kyiv firewood brand. Invent ONE fresh, funny visual
+scene for the post's main idea, in which the character Ivanovych performs the core action (not decoration).
+If firewood, pellets or briquettes appear, describe them exactly as the firewood guide says (shape, bark, end faces, stacking).
+If the post is about a trending topic, make the scene recognisable through generic props as the trend rule says.
 Return only JSON: {"prompt": "1-2 English sentences describing only the scene and action, positive wording, no lists of
 what to avoid, no style words", "idea": "one line in Ukrainian"}"""
+
+
+WOOD_WORDS = re.compile(r"firewood|log|wood|timber|stack|fireplace|stove|дров|полін", re.I)
 
 
 def render_prompt(scene: str, il: dict | None = None) -> str:
     """Prompt for the image model: the scene plus a short positive-only description.
     Negative lists stay out: Cloudflare's safety filter flags words like weapons or children."""
     il = il or load("illustration.json")
-    return f"{scene.strip()}\n{il['render']}"
+    wood = f"\n{il['firewood_render']}" if il.get("firewood_render") and WOOD_WORDS.search(scene) else ""
+    return f"{scene.strip()}{wood}\n{il['render']}"
 
 
-def image_prompt(gm: Gemini, post_text: str) -> dict:
+def image_prompt(gm: Gemini, post_text: str, topic: str = "") -> dict:
     il = load("illustration.json")
-    rules = f"Character: {il['character']}\nStyle: {il['style']}\nText: {il['text_rule']}\nBanned: {il['banned']}"
-    data = parse_json(gm.generate(f"{rules}\n\nPost:\n{post_text}", system=ILLUSTRATOR, json_mode=True, temperature=0.9))
+    rules = (f"Character: {il['character']}\nStyle: {il['style']}\nText: {il['text_rule']}\nBanned: {il['banned']}\n"
+             f"Firewood guide: {il.get('firewood', '')}\nTrend rule: {il.get('trend_rule', '')}")
+    trend = f"\n\nTrending topic behind the post: {topic}" if topic else ""
+    data = parse_json(gm.generate(f"{rules}{trend}\n\nPost:\n{post_text}", system=ILLUSTRATOR, json_mode=True, temperature=0.9))
     prompt = str(data.get("prompt", "")).strip()
     if not prompt:
         raise ValueError("пустий промпт")
@@ -308,6 +316,8 @@ IMAGE_JUDGE = """Ти арт-директор Threads-акаунта. Більш
 Відповідь тільки JSON: {"image": true/false, "why": "коротко"}"""
 
 
-def needs_image(gm: Gemini, text: str) -> tuple[bool, str]:
-    data = parse_json(gm.generate(f"Пост:\n{text}", system=IMAGE_JUDGE, json_mode=True, temperature=0.2))
+def needs_image(gm: Gemini, text: str, trend: bool = False) -> tuple[bool, str]:
+    hint = ("Це пост на гарячу тему дня: тут картинка з Івановичем, що реагує на тему, часто підсилює впізнаваність.\n"
+            if trend else "")
+    data = parse_json(gm.generate(f"{hint}Пост:\n{text}", system=IMAGE_JUDGE, json_mode=True, temperature=0.2))
     return bool(data.get("image")), str(data.get("why", ""))[:150]

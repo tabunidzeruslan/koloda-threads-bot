@@ -69,3 +69,20 @@ class NoSearchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class IllustrationPromptTest(unittest.TestCase):
+    def test_firewood_detail_only_when_scene_has_wood(self):
+        from bot import writer
+        il = writer.load("illustration.json")
+        with_wood = writer.render_prompt("Ivanovych stacks firewood by the fence.")
+        self.assertIn(il["firewood_render"], with_wood)
+        self.assertIn(il["render"], with_wood)
+        plain = writer.render_prompt("Ivanovych watches snow fall with a thermos.")
+        self.assertNotIn(il["firewood_render"], plain)
+
+    def test_render_has_no_negative_lists(self):
+        from bot import writer
+        il = writer.load("illustration.json")
+        for key in ("render", "firewood_render"):
+            self.assertNotRegex(il[key], r"\b(No|Never|not)\b")

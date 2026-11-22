@@ -21,12 +21,13 @@ STATUS_RU = {"new": "ждёт черновика", "sent": "ждёт вашег�
              "skipped": "пропущен", "expired": "не успел"}
 HELP = ("Команды:\n/status - что запланировано\n/on - включить ежедневные черновики (3 в день)\n"
         "/off - выключить\n/tysha - тишина на сегодня (день траура или тяжёлых обстрелов)\n/preview 3 - показать N пробных постов (ничего не публикуется)\n"
-        "/selftest - проверить ключи и разрешения\n\n"
+        "/selftest - проверить ключи и разрешения\n/draw тема - пробная картинка с Ивановичем (ничего не публикуется)\n\n"
         "Под черновиком кнопки: Опубликовать / Другой вариант / Пропустить. "
         "Чтобы поправить текст, ответьте (Reply) на черновик своим текстом.\n"
         "Бот просыпается раз в 30 минут, поэтому ответ приходит с задержкой.")
 MAX_GEN_PER_RUN = 2
 MAX_AUTO_IMAGES_PER_DAY = 1  # the bot decides itself which post deserves a picture
+MAX_HYPE_IMAGES_PER_DAY = 1  # plus one for a trend post
 TREND_HOURS = (9, 13, 17)   # Kyiv hours when the bot looks at Google Trends Ukraine
 MAX_HYPE_PER_DAY = 2
 HYPE_SPACING_MIN = 30
@@ -237,6 +238,8 @@ class Bot:
                 self.say("Напишите после /hype, о чём хайп, или пришлите скрин с подписью /hype.")
                 return
             self.make_hype(topic, url="", images=[img] if img else None, source="ваш /hype")
+        elif cmd in ("/draw", "/малюй", "/рисуй"):
+            self.draw(arg.strip() or (m.get("reply_to_message") or {}).get("text") or "")
         elif cmd == "/trends":
             self.check_trends(force=True)
         elif cmd in ("/tysha", "/тиша", "/quiet"):
@@ -409,11 +412,12 @@ class Bot:
             return True
         if not self.images or not self.gm or sl["kind"] == "sell":
             return False
-        today = [x for x in self.slots() if (x.get("draft") or {}).get("image_auto")]
-        if len(today) >= MAX_AUTO_IMAGES_PER_DAY:
+        hype = sl.get("kind") == "hype"
+        today = [x for x in self.slots() if (x.get("draft") or {}).get("image_auto") and (x.get("kind") == "hype") == hype]
+        if len(today) >= (MAX_HYPE_IMAGES_PER_DAY if hype else MAX_AUTO_IMAGES_PER_DAY):
             return False
         try:
-            yes, why = writer.needs_image(self.gm, sl["draft"]["text"])
+            yes, why = writer.needs_image(self.gm, sl["draft"]["text"], trend=sl.get("kind") == "hype")
         except Exception as e:
             log("image judge failed:", e)
             return False
@@ -426,7 +430,8 @@ class Bot:
             return
         d = sl["draft"]
         try:
-            ip = writer.image_prompt(self.gm, d["text"])
+            topic = sl.get("topic", "") if sl.get("kind") == "hype" else ""
+            ip = writer.image_prompt(self.gm, d["text"], topic=topic)
             res = self.images.generate(ip["prompt"], log=log)
         except Exception as e:
             log("image failed:", e)
@@ -435,6 +440,20 @@ class Bot:
         d["image"] = {"provider": res["provider"], "url": res["url"], "idea": ip["idea"]}
         d.pop("image_error", None)
         self._image_bytes = res["bytes"]
+
+    def draw(self, topic: str) -> None:
+        if not self.images or not self.gm:
+            self.say("Картинки не настроены.")
+            return
+        if not topic:
+            self.say("Напишите после /draw, что нарисовать, например: /draw Динамо выиграло, а у нас дрова сухие")
+            return
+        try:
+            ip = writer.image_prompt(self.gm, topic, topic=topic)
+            res = self.images.generate(ip["prompt"], log=log)
+            self.tg.send_photo(self.owner, res["bytes"], f"Пробная картинка (не публикуется): {ip['idea']}"[:1000])
+        except Exception as e:
+            self.say(f"Не получилось нарисовать: {net.scrub(str(e))[:200]}")
 
     def send_draft(self, sl: dict, note: str | None = None) -> None:
         d = sl["draft"]
