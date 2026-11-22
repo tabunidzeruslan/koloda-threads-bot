@@ -34,6 +34,11 @@ COLD_WORDS = ["мороз", "снігопад", "заметіл", "опалюв�
 GOAL_TALK = re.compile(r"10\s?000|10\s?тис|десять тисяч|\d+\s*підписник")
 
 
+def first_word(text: str) -> str:
+    m = re.match(r"\W*([\w'’ʼ-]+)", (text or "").strip().lower())
+    return m.group(1) if m else ""
+
+
 def load(name: str):
     return json.loads((DATA / name).read_text(encoding="utf-8"))
 
@@ -98,6 +103,9 @@ def check(text: str, *, sell: bool, today: date, recent: list[str], examples: li
         return "не той сезон (літо)"
     if today.month in (5, 6, 7, 8) and any(w in low for w in COLD_WORDS):
         return "не той сезон (зима)"
+    opener = first_word(t)
+    if len(opener) >= 4 and any(first_word(o) == opener for o in recent[-15:] if o):
+        return f"той самий початок, що в недавньому пості («{opener}»)"
     for other in recent + examples:
         if other and similar(t, other) > 0.6:
             return "схожий на недавній пост або приклад"
@@ -244,7 +252,7 @@ def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[st
         "Факти про бізнес (єдине джерело): " + json.dumps(biz, ensure_ascii=False),
         "Перевірені факти ніші: " + json.dumps(facts["facts"] + knowledge_sample(), ensure_ascii=False),
         "Приклади тону (не копіюй, лише стиль): " + json.dumps(style["examples"], ensure_ascii=False),
-        "Недавні пости (не повторюй теми і жарти): " + json.dumps(recent[-12:], ensure_ascii=False),
+        "Недавні пости (не повторюй теми, жарти і ПОЧАТКИ: перше слово має бути іншим, ніж у них): " + json.dumps(recent[-12:], ensure_ascii=False),
     ]
     try:
         pt = load("people_topics.json")
@@ -515,11 +523,13 @@ SAFETY = """Ти фінальна перевірка безпеки перед �
 - є війна, фронт, обстріли, тривоги, зброя, військові, ТЦК, мобілізація, полонені, окупація, політика, політики, вибори,
   влада, мер, КМДА, релігія, мова як конфлікт, національності, трагедії, смерть, хвороби;
 - є образа, приниження чи висміювання людей або груп (віку, статі, регіонів, професій, бідності), мат, вульгарність;
-- є тригер, який може розлютити людей (сварка заради сварки, знецінення проблем, жарт про відключення світла в день масованої атаки);
+- є тригер, який може розлютити людей (сварка заради сварки, знецінення проблем, жарт про обстріли чи тривоги);
 - є вигадані факти, ціни, акції, обіцянки, яких компанія не давала; згадка конкурентів;
-- сьогоднішня повістка (заголовки нижче) про масовану атаку, жертви, день жалоби: тоді будь-який гумор недоречний, ok=false;
 - текст має граматичні помилки або незрозумілий.
-Якщо все гаразд, ok=true. Сумніваєшся = false.
+ВАЖЛИВО (власник, 22.11.2026): обстріли в Україні щодня, і це НЕ причина не публікувати. Новини потрібні тільки для одного:
+щоб пост не зачіпав ці теми і не жартував про них. Оцінюй сам текст. Блокуй через новини лише тоді, коли офіційно оголошено
+день жалоби. Звичайний пост про дрова, побут, погоду чи гумор без заборонених тем = ok=true.
+ok=false тільки при явному порушенні правил вище.
 Відповідь тільки JSON: {"ok": true/false, "why": "коротко українською"}"""
 
 
@@ -540,14 +550,15 @@ def safety_check(gm: Gemini, text: str, headlines: list[str]) -> tuple[bool, str
     return bool(data.get("ok")), str(data.get("why", ""))[:200]
 
 
-SOMBER_WORDS = ("жалоб", "масован", "загибл", "загинул", "жертв", "ракетн", "удар по києву", "атака на київ", "атаки на київ")
+# owner 22.11.2026: shelling happens every day and is not a reason to stop posting; only an official day of mourning is
+SOMBER_WORDS = ("день жалоби", "днем жалоби", "оголошено жалобу", "оголосили жалобу", "оголосив жалобу")
 
 
 def somber_day(headlines: list[str]) -> str:
     """A crude, model-free guard: on days of mass attacks or mourning the bot does not auto-post jokes."""
     for h in headlines:
         low = h.lower()
-        if any(w in low for w in SOMBER_WORDS) and ("київ" in low or "києв" in low or "україн" in low):
+        if any(w in low for w in SOMBER_WORDS):
             return h[:150]
     return ""
 

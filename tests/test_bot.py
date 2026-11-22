@@ -659,3 +659,15 @@ class SilentFreedomTests(unittest.TestCase):
                 b.tick()
         self.assertEqual(b.tg.sent, [])
         self.assertTrue(any((x.get("draft") or {}).get("lib") for x in b.slots()))
+
+
+class OwnerFeedbackTests(unittest.TestCase):
+    def test_same_opener_rejected(self):
+        recent = ["Зізнаємось, ми теж колись купували дрова на око. А ви?"]
+        why = writer.check("Зізнаємось чесно: дровник у нас завжди трохи безладний. У вас так само?", sell=False,
+                           today=date(2026, 11, 22), recent=recent, examples=[])
+        self.assertIn("початок", why)
+
+    def test_shelling_news_is_not_a_stop(self):
+        self.assertEqual(writer.somber_day(["Масована ракетна атака на Київ вночі"]), "")
+        self.assertTrue(writer.somber_day(["У Києві оголошено день жалоби"]))
