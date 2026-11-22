@@ -43,13 +43,14 @@ class Images:
             out.append("pollinations")
         return out
 
-    def generate(self, prompt: str, log=print) -> dict:
-        """Returns {"bytes": ..., "provider": ..., "url": public url or ""}."""
+    def generate(self, prompt: str, log=print, character: bool = True) -> dict:
+        """Returns {"bytes": ..., "provider": ..., "url": public url or ""}.
+        character=True draws Ivanovych from the reference images; False draws a scene without him."""
         errors = []
         for p in self.providers():
             try:
                 if p == "cloudflare":
-                    refs = self.references()
+                    refs = self.references() if character else []
                     if refs:
                         try:
                             return {"bytes": self._cloudflare_ref(prompt, refs), "provider": "cloudflare-ref", "url": ""}

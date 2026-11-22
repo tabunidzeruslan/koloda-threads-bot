@@ -9,7 +9,7 @@ import sys
 import time
 from datetime import date, datetime
 
-from . import chat, crypto, net, state as st, trends, writer
+from . import chat, crypto, meme, net, state as st, trends, writer
 from .cfai import CFText
 from .images import Images
 from .gemini import Gemini
@@ -392,8 +392,29 @@ class Bot:
             [("👀 3 пробных (без публикации)", "m|preview")]])
 
     def menu_hype(self) -> None:
-        self.say("Хайп: взять тему из трендов Украины прямо сейчас или вашу?", buttons=[
-            [("📈 Тренды сейчас", "m|trends"), ("✏️ Своя тема", "m|hypeown")]])
+        self.say("🔥 Хайп: что сделать?", buttons=[
+            [("📰 Что сейчас обсуждают", "m|digest")],
+            [("⚡ Сразу пост по лучшему тренду", "m|trends")],
+            [("✏️ Своя тема или скриншот", "m|hypeown")]])
+
+    def menu_digest(self) -> None:
+        if not self.gm:
+            return self.say("Нет ключа Gemini.")
+        self.say("📰 Смотрю Google Trends и киевские новости, около минуты…")
+        try:
+            topics = writer.digest(self.gm, trends.signals(log=log))
+        except Exception as e:
+            return self.say(f"Не получилось: {net.scrub(str(e))[:200]}")
+        if not topics:
+            return self.say("Сейчас нет безопасных горячих тем для нас.")
+        self.s["digest"] = topics
+        lines = ["📰 О чём сейчас говорят в Киеве и Украине:"]
+        for i, t in enumerate(topics):
+            lines.append(f"\n{i + 1}. {t['title']} {'🔥' * min(5, int(t['heat'] or 0)) if str(t['heat']).isdigit() else ''}\n"
+                         f"   Почему горячо: {t['why']}\n   Наш кут: {t['angle']}")
+        btns = [[(f"✍️ Пост на тему {i + 1}", f"m|dig|{i}") for i in range(j, min(j + 2, len(topics)))]
+                for j in range(0, len(topics), 2)]
+        self.say("\n".join(lines), buttons=btns)
 
     def menu_draw(self) -> None:
         self.s["await"] = {"what": "draw", "at": now_kyiv().isoformat()}
@@ -438,6 +459,15 @@ class Bot:
         elif what == "trends":
             self.say("📈 Смотрю тренды Украины…")
             self.check_trends(force=True)
+        elif what == "digest":
+            self.menu_digest()
+        elif what.startswith("dig|"):
+            i = what.partition("|")[2]
+            topics = self.s.get("digest") or []
+            if i.isdigit() and int(i) < len(topics):
+                t = topics[int(i)]
+                self.say(f"🔥 Пишу пост: {t['title']}")
+                self.make_hype(f"{t['source']}: {t['title']}. Кут: {t['angle']}", url=t.get("url", ""), source="ваш выбор из трендов")
         elif what == "hypeown":
             self.s["await"] = {"what": "hype", "at": now_kyiv().isoformat()}
             self.say("Напишите тему одним сообщением или пришлите скриншот из ленты (можно с подписью).")
@@ -786,15 +816,27 @@ class Bot:
         d = sl["draft"]
         try:
             topic = sl.get("topic", "") if sl.get("kind") == "hype" else ""
-            ip = writer.image_prompt(self.gm, d["text"], topic=topic)
-            res = self.images.generate(ip["prompt"], log=log)
+            res, ip = self.render_image(d["text"], topic)
         except Exception as e:
             log("image failed:", e)
             d["image_error"] = net.scrub(str(e))[:200]
             return
-        d["image"] = {"provider": res["provider"], "url": res["url"], "idea": ip["idea"]}
+        d["image"] = {"provider": res["provider"], "url": "", "idea": ip["idea"], "mode": ip["mode"]}
         d.pop("image_error", None)
         self._image_bytes = res["bytes"]
+
+    def render_image(self, text: str, topic: str = "") -> tuple[dict, dict]:
+        """Meme with Ivanovych (panels + captions in meme fonts) or a cosy scene without him."""
+        ip = writer.image_prompt(self.gm, text, topic=topic)
+        if ip["mode"] == "meme":
+            shots = [self.images.generate(p, log=log, character=True) for p in ip["panels"]]
+            data = shots[0]["bytes"]
+            if meme.available() and ip["captions"]:
+                data = meme.compose(ip["layout"], [x["bytes"] for x in shots], ip["captions"])
+            ip["idea"] = f"мем «{ip['format']}»: {ip['idea']}"
+            return {"bytes": data, "provider": shots[0]["provider"]}, ip
+        res = self.images.generate(ip["prompt"], log=log, character=False)
+        return {"bytes": res["bytes"], "provider": res["provider"]}, ip
 
     def draw(self, topic: str) -> None:
         if not self.images or not self.gm:
@@ -804,8 +846,7 @@ class Bot:
             self.say("Напишите после /draw, что нарисовать, например: /draw Динамо выиграло, а у нас дрова сухие")
             return
         try:
-            ip = writer.image_prompt(self.gm, topic, topic=topic)
-            res = self.images.generate(ip["prompt"], log=log)
+            res, ip = self.render_image(topic, topic=topic)
             self.tg.send_photo(self.owner, res["bytes"], f"Пробная картинка (не публикуется): {ip['idea']}"[:1000])
         except Exception as e:
             self.say(f"Не получилось нарисовать: {net.scrub(str(e))[:200]}")
@@ -941,7 +982,7 @@ class Bot:
                 return
         self.s["trend_checks"] = (self.s.get("trend_checks", []) + [mark])[-20:]
         try:
-            items = trends.fetch_trends()
+            items = trends.signals(log=log)
             pick = writer.pick_trend(self.gm, items, self.s.get("trends_used", []))
         except Exception as e:
             log("trends failed:", e)
@@ -953,7 +994,7 @@ class Bot:
                 self.say("Сейчас в трендах нет безопасной темы для нас (или всё про войну и политику).")
             return
         self.s["trends_used"] = (self.s.get("trends_used", []) + [pick["title"]])[-60:]
-        self.make_hype(pick["topic"], url=pick["url"], source="Google Trends")
+        self.make_hype(pick["topic"], url=pick["url"], source="тренды и новости")
 
     # ---------- owner tools
     def status_text(self) -> str:

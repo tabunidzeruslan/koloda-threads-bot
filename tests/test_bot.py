@@ -307,7 +307,7 @@ class ImageTests(unittest.TestCase):
         post = {"text": GOOD, "rubric": "x", "score": 8, "fact": "ok", "fact_note": None}
         with mock.patch("bot.writer.write_post", side_effect=lambda *a, **k: dict(post)), \
              mock.patch("bot.writer.needs_image", return_value=(True, "абсурдна сцена")), \
-             mock.patch("bot.writer.image_prompt", return_value={"prompt": "p", "idea": "i"}):
+             mock.patch("bot.writer.image_prompt", return_value={"mode": "scene", "prompt": "p", "idea": "i"}):
             b.tick()
         with_img = [x for x in b.slots() if (x.get("draft") or {}).get("image")]
         self.assertEqual(len(with_img), 1)

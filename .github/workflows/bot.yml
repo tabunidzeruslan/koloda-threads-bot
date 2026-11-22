@@ -47,6 +47,8 @@ jobs:
       - name: Tests
         run: python3 -m unittest discover -s tests -t . -q
 
+      - name: Pillow for memes
+        run: pip install --quiet --disable-pip-version-check pillow || echo "no pillow, memes without captions"
       - name: Run bot
         env:
           THREADS_TOKEN: ${{ secrets.THREADS_TOKEN }}

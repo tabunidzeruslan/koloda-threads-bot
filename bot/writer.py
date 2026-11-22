@@ -157,10 +157,21 @@ def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[st
         "Приклади тону (не копіюй, лише стиль): " + json.dumps(style["examples"], ensure_ascii=False),
         "Недавні пости (не повторюй теми і жарти): " + json.dumps(recent[-12:], ensure_ascii=False),
     ]
+    kc = kyiv_context(today)
+    if kc:
+        lines.append(kc)
     if OWNER["facts"]:
         lines.append("Факти від власника (правда, можна використовувати): " + json.dumps(OWNER["facts"], ensure_ascii=False))
     if OWNER["rules"]:
         lines.append("ПРАВИЛА ВЛАСНИКА (найважливіші, виконуй завжди): " + json.dumps(OWNER["rules"], ensure_ascii=False))
+    try:
+        hum = load("humor.json")
+        lines.append("ГУМОР (як жартувати): " + json.dumps(hum.get("principles", []), ensure_ascii=False))
+        lines.append("Сучасні формати жартів (обери доречний, не копіюй приклад): " +
+                     json.dumps(random.sample(hum.get("formats", []), min(5, len(hum.get("formats", [])))), ensure_ascii=False))
+        lines.append("Не можна в гуморі: " + json.dumps(hum.get("avoid", []), ensure_ascii=False))
+    except (OSError, ValueError):
+        pass
     r = rules()
     if r:
         lines.append("Правила Threads-поста: " + json.dumps(r.get("threads_post", []), ensure_ascii=False))
@@ -205,7 +216,11 @@ EDITOR = """Ти суворий редактор постів у Threads. Оці
 
 
 def score(gm: Gemini, texts: list[str], today: date, recent: list[str]) -> list[tuple[int, str]]:
-    checks = rules().get("editor_checks", []) + [f"Чи виконано правило власника: {x}?" for x in OWNER["rules"]]
+    try:
+        hchecks = load("humor.json").get("self_check", [])
+    except (OSError, ValueError):
+        hchecks = []
+    checks = rules().get("editor_checks", []) + hchecks + [f"Чи виконано правило власника: {x}?" for x in OWNER["rules"]]
     logic = ("Перевірка логіки (якщо хоч одна відповідь погана, оцінка не вище 4): " +
              json.dumps(checks, ensure_ascii=False) + "\n") if checks else ""
     prompt = (logic +f"Дата: {today.isoformat()}, сезон: {season(today)}.\nНедавні пости: {json.dumps(recent[-8:], ensure_ascii=False)}\n"
@@ -239,7 +254,7 @@ PICKER = """Ти SMM-редактор зухвалого київського б
 
 
 def pick_trend(gm: Gemini, trends: list[dict], used: list[str]) -> dict | None:
-    items = [t for t in trends if t["title"] not in used][:20]
+    items = [t for t in trends if t["title"] not in used][:45]
     if not items:
         return None
     listing = "\n".join(f"{i}: {t['title']} ({t['traffic']}) - " + " | ".join(n["title"] for n in t["news"][:2])
@@ -254,6 +269,66 @@ def pick_trend(gm: Gemini, trends: list[dict], used: list[str]) -> dict | None:
     t = items[i]
     link = t["news"][0]["url"] if t["news"] else ""
     return {"title": t["title"], "topic": f"{t['title']}: {data.get('topic', '')}", "url": link}
+
+
+DIGEST = """Ти SMM-аналітик київського бренду дров Koloda. Перед тобою тренди пошуку України і свіжі заголовки київських і
+українських медіа. Визнач 5 тем, про які сьогодні найбільше говорять люди в Києві та Україні і на які бренд може БЕЗПЕЧНО
+і логічно відреагувати в Threads. Для кожної: коротка суть, чому вона гаряча, і логічний кут для поста бренду (спільне
+почуття, та сама ситуація або аналогія). Українська і київська повістка важливіша за світову.
+НЕ можна: війна, мобілізація, ТЦК, обстріли, загиблі, трагедії, політика, релігія, кримінал.
+Відповідь тільки JSON: {"topics": [{"i": 0, "title": "суть російською, коротко", "heat": 1-5, "why": "російською", "angle": "кут для поста російською"}]}"""
+
+
+def digest(gm: Gemini, items: list[dict]) -> list[dict]:
+    items = items[:60]
+    listing = "\n".join(f"{i}: {t['title']} ({t['traffic']})" + (" - " + " | ".join(n["title"] for n in t["news"][:2])
+                                                               if t["news"] and t["news"][0]["title"] != t["title"] else "")
+                        for i, t in enumerate(items))
+    data = parse_json(gm.generate("Сигнали:\n" + listing, system=DIGEST, json_mode=True, temperature=0.3))
+    out = []
+    for x in (data.get("topics") or [])[:5] if isinstance(data, dict) else []:
+        try:
+            t = items[int(x["i"])]
+        except (KeyError, ValueError, TypeError, IndexError):
+            continue
+        out.append({"title": str(x.get("title") or t["title"])[:150], "heat": x.get("heat", ""), "why": str(x.get("why", ""))[:200],
+                    "angle": str(x.get("angle", ""))[:200], "source": t["title"][:200],
+                    "url": t["news"][0]["url"] if t["news"] else ""})
+    return out
+
+
+def kyiv_context(today: date, rnd: random.Random | None = None) -> str:
+    """A small rotating slice of Kyiv life, slang and calendar, so posts sound local."""
+    try:
+        k = load("kyiv.json")
+    except (OSError, ValueError):
+        return ""
+    rnd = rnd or random.Random()
+    parts = []
+    life = k.get("city_life", [])
+    if life:
+        parts.append("Київські реалії (для впізнаваних жартів): " + json.dumps(rnd.sample(life, min(5, len(life))), ensure_ascii=False))
+    slang = [x.get("word") for x in k.get("slang", []) if x.get("use") == "ok"]
+    if slang:
+        parts.append("Сленг, який можна вживати зрідка і доречно: " + ", ".join(rnd.sample(slang, min(8, len(slang)))))
+    places = [x.get("name") for x in k.get("districts", []) + k.get("oblast_towns", []) if x.get("name")]
+    if places:
+        parts.append("Райони і містечка, куди ми возимо: " + ", ".join(rnd.sample(places, min(6, len(places)))))
+    md = today.strftime("%m-%d")
+    near = [f"{c.get('date')}: {c.get('event')} ({c.get('angle', '')})" for c in k.get("calendar", [])
+            if str(c.get("date", ""))[:5] and abs(_day_diff(str(c.get("date"))[:5], md)) <= 3]
+    if near:
+        parts.append("Близькі дати: " + "; ".join(near[:3]))
+    return "\n".join(parts)
+
+
+def _day_diff(a: str, b: str) -> int:
+    try:
+        da, db = date(2001, int(a[:2]), int(a[3:5])), date(2001, int(b[:2]), int(b[3:5]))
+    except ValueError:
+        return 999
+    d = (da - db).days
+    return min(d, d - 365, d + 365, key=abs)
 
 
 def factcheck(gm: Gemini, text: str, topic: str = "") -> tuple[str, str, str | None]:
@@ -319,36 +394,79 @@ def write_post(gm: Gemini, *, today: date, sell: bool, recent: list[str], last_r
     return None
 
 
-ILLUSTRATOR = """You design one illustration for a Threads post of a Kyiv firewood brand. Invent ONE fresh, funny visual
-scene for the post's main idea, in which the character Ivanovych performs the core action (not decoration).
-If firewood, pellets or briquettes appear, describe them exactly as the firewood guide says (shape, bark, end faces, stacking).
-If the post is about a trending topic, make the scene recognisable through generic props as the trend rule says.
-Return only JSON: {"prompt": "1-2 English sentences describing only the scene and action, positive wording, no lists of
-what to avoid, no style words", "idea": "one line in Ukrainian"}"""
+ILLUSTRATOR = """You are the art director of a Kyiv firewood brand's Threads. Make ONE image for the post. Two modes:
+
+"meme": the brand character Ivanovych reenacts a recognisable meme format from the list (never the original meme photo,
+never real people). Use it for jokes, trends, hype, relatable pain, sarcasm. Pick the format whose structure really fits
+the joke. Captions in Ukrainian, short, punchy, modern internet humour (see humour rules), they must make sense together
+with the picture. Each panel: 1-2 English sentences describing Ivanovych's pose, face and props, positive wording.
+"scene": a cosy or informative picture WITHOUT any person (firewood, fireplace, stove, stacked wood, pellets, delivery
+truck at a Kyiv-region house). Use it for calm, useful, warm posts. 1-2 English sentences, positive wording.
+
+If firewood, pellets or briquettes appear, describe them exactly as the firewood guide says.
+For a trending topic, show it only through generic props as the trend rule says.
+Return only JSON:
+{"mode": "meme", "format": "format id", "style": "modern" | "classic", "panels": ["scene for panel 1", "scene for panel 2 if the format has 2"],
+ "captions": ["caption 1", "caption 2 if needed"], "idea": "one line in Ukrainian"}
+or {"mode": "scene", "prompt": "scene", "idea": "one line in Ukrainian"}"""
 
 
 WOOD_WORDS = re.compile(r"firewood|log|wood|timber|stack|fireplace|stove|дров|полін", re.I)
 
 
-def render_prompt(scene: str, il: dict | None = None) -> str:
+def render_prompt(scene: str, il: dict | None = None, character: bool = True) -> str:
     """Prompt for the image model: the scene plus a short positive-only description.
     Negative lists stay out: Cloudflare's safety filter flags words like weapons or children."""
     il = il or load("illustration.json")
     wood = f"\n{il['firewood_render']}" if il.get("firewood_render") and WOOD_WORDS.search(scene) else ""
-    return f"{scene.strip()}{wood}\n{il['render']}"
+    tail = il["render"] if character else il.get("scene_render", "")
+    return f"{scene.strip()}{wood}\n{tail}"
+
+
+def meme_formats() -> dict:
+    try:
+        return {f["id"]: f for f in load("memes.json")["formats"]}
+    except (OSError, ValueError, KeyError):
+        return {}
 
 
 def image_prompt(gm: Gemini, post_text: str, topic: str = "") -> dict:
+    """Returns {"mode": "meme", "layout", "panels": [prompts], "captions", "idea"} or {"mode": "scene", "prompt", "idea"}."""
     il = load("illustration.json")
-    rules = (f"Character: {il['character']}\nStyle: {il['style']}\nText: {il['text_rule']}\nBanned: {il['banned']}\n"
-             f"Firewood guide: {il.get('firewood', '')}\nTrend rule: {il.get('trend_rule', '')}")
-    trend = f"\n\nTrending topic behind the post: {topic}" if topic else ""
+    fm = meme_formats()
+    try:
+        mem = load("memes.json")
+    except (OSError, ValueError):
+        mem = {}
+    hum = {}
+    try:
+        hum = load("humor.json")
+    except (OSError, ValueError):
+        pass
+    formats = [{k: f[k] for k in ("id", "name", "panels", "slots", "example") if k in f} for f in fm.values()]
+    rules = (f"Character: {il['character']}\nFirewood guide: {il.get('firewood', '')}\nTrend rule: {il.get('trend_rule', '')}\n"
+             f"Banned: {il['banned']}\nMeme rules: {json.dumps(mem.get('rules', []), ensure_ascii=False)}\n"
+             f"Meme formats: {json.dumps(formats, ensure_ascii=False)}\n"
+             f"Humour rules: {json.dumps(hum.get('principles', [])[:12], ensure_ascii=False)}")
+    trend = f"\n\nTrending topic behind the post: {topic}. Prefer a meme." if topic else ""
     data = parse_json(gm.generate(f"{rules}{trend}\n\nPost:\n{post_text}", system=ILLUSTRATOR, json_mode=True, temperature=0.9))
-    prompt = str(data.get("prompt", "")).strip()
+    idea = str(data.get("idea", ""))[:200]
+    if data.get("mode") == "meme" and data.get("format") in fm and data.get("panels"):
+        f = fm[data["format"]]
+        layout = f.get("layout", "caption_above")
+        if layout == "caption_above" and data.get("style") == "classic":
+            layout = "classic"
+        n = 2 if layout.startswith("two_panel") else 1
+        panels = [str(x) for x in data["panels"]][:n]
+        while len(panels) < n:
+            panels.append(panels[-1])
+        caps = [str(x).strip() for x in data.get("captions") or [] if str(x).strip()][:2]
+        return {"mode": "meme", "format": f["id"], "layout": layout, "captions": caps, "idea": idea or f["name"],
+                "panels": [render_prompt(p, il, character=True) for p in panels]}
+    prompt = str(data.get("prompt") or (data.get("panels") or [""])[0]).strip()
     if not prompt:
         raise ValueError("пустий промпт")
-    full = render_prompt(prompt, il)
-    return {"prompt": full, "idea": str(data.get("idea", ""))[:200]}
+    return {"mode": "scene", "prompt": render_prompt(prompt, il, character=False), "idea": idea}
 
 
 IMAGE_JUDGE = """Ти арт-директор Threads-акаунта. Більшість постів у Threads краще працюють БЕЗ картинки: текст сам по собі.

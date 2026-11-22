@@ -93,3 +93,58 @@ def calendar_note(today: date) -> str:
         if ev:
             notes.append(f"{'сьогодні' if i == 0 else d.strftime('%d.%m')}: {ev}")
     return ("Найближчі приводи: " + "; ".join(notes) + ".") if notes else ""
+
+
+def parse_rss(xml_text: str, source: str, limit: int = 12) -> list[dict]:
+    """RSS 2.0 or Atom -> [{"title", "url", "source"}]."""
+    root = ET.fromstring(xml_text)
+    out = []
+    for item in root.iter():
+        if _local(item.tag) not in ("item", "entry"):
+            continue
+        title, url = "", ""
+        for el in item:
+            n = _local(el.tag)
+            if n == "title":
+                title = (el.text or "").strip()
+            elif n == "link":
+                url = (el.text or "").strip() or el.attrib.get("href", "")
+        if title:
+            out.append({"title": title, "url": url, "source": source})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def news_sources() -> list[dict]:
+    try:
+        return json.loads((DATA / "kyiv.json").read_text(encoding="utf-8")).get("trend_sources", [])
+    except (OSError, ValueError):
+        return []
+
+
+def fetch_news(sources: list[dict] | None = None, per_source: int = 8, log=print) -> list[dict]:
+    out = []
+    for src in (sources if sources is not None else news_sources())[:15]:
+        url = src.get("rss") or ""
+        if not url.startswith("http"):
+            continue
+        try:
+            req = Request(url, headers={"User-Agent": "Mozilla/5.0 koloda-threads-bot"})
+            with urlopen(req, timeout=15) as r:
+                out += parse_rss(r.read().decode("utf-8", "replace"), src.get("name", ""), per_source)
+        except Exception as e:  # one dead feed must not stop the rest
+            log("news feed failed:", src.get("name"), str(e)[:80])
+    return out
+
+
+def signals(log=print) -> list[dict]:
+    """Google Trends Ukraine + Kyiv/Ukraine news headlines, in one list for the picker."""
+    items = []
+    try:
+        items += fetch_trends()
+    except Exception as e:
+        log("google trends failed:", str(e)[:100])
+    for n in fetch_news(log=log):
+        items.append({"title": n["title"], "traffic": n["source"], "news": [n]})
+    return items

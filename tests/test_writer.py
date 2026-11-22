@@ -86,3 +86,22 @@ class IllustrationPromptTest(unittest.TestCase):
         il = writer.load("illustration.json")
         for key in ("render", "firewood_render"):
             self.assertNotRegex(il[key], r"\b(No|Never|not)\b")
+
+
+class MemeTest(unittest.TestCase):
+    def test_compose_all_layouts(self):
+        from bot import meme
+        if not meme.available():
+            self.skipTest("no Pillow")
+        from pathlib import Path
+        img = (Path(__file__).resolve().parent.parent / "data" / "ref" / "ivanych_full.png").read_bytes()
+        for layout in ("caption_above", "classic", "two_panel_vertical", "two_panel_horizontal"):
+            out = meme.compose(layout, [img, img], ["Очікування: затишний вечір", "Реальність: дим"])
+            self.assertTrue(out.startswith(b"\x89PNG"), layout)
+
+    def test_meme_formats_valid(self):
+        from bot import writer
+        fm = writer.meme_formats()
+        self.assertGreaterEqual(len(fm), 20)
+        for f in fm.values():
+            self.assertIn(f["layout"], ("caption_above", "classic", "two_panel_vertical", "two_panel_horizontal"))
