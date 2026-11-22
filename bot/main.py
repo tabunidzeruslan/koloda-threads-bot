@@ -55,6 +55,7 @@ WORD_ACTIONS = {  # plain words, Russian or Ukrainian, without the emoji
 
 FREEDOM_ON, FREEDOM_OFF = "Повна свобода", "Стоп свободи"
 FREEDOM_MIN_SCORE = 7
+FREEDOM_LATE_SCORE = 6  # after 3 weak tries a solid 6 is better than an empty slot
 
 
 MENU_ACTIONS.update({FREEDOM_ON: "menu_freedom_on", FREEDOM_OFF: "menu_freedom_off",
@@ -1295,7 +1296,8 @@ class Bot:
             post = writer.write_post(self.gm, today=self.now.date(), sell=sell, recent=self.recent_texts(),
                                      last_rubrics=self.last_rubrics(), rnd=self.rnd, log=log,
                                      background=self.background(), topic=topic, images=images,
-                                     role=(sl or {}).get("role", ""), prefer=(sl or {}).get("prefer"))
+                                     role=(sl or {}).get("role", ""), prefer=(sl or {}).get("prefer"),
+                                     min_score=FREEDOM_LATE_SCORE if (sl or {}).get("tries", 0) >= 3 else writer.MIN_SCORE)
         except Exception as e:
             log("writer failed:", e)
             return None
@@ -1408,7 +1410,8 @@ class Bot:
                    [("🔁 Інший текст", f"re|{ref}"), ("⏭ Пропустити", f"sk|{ref}")],
                    [("🎨 Інша картинка", f"im|{ref}"), ("🗑 Прибрати картинку", f"ni|{ref}")] if img
                    else [("🎨 Додати картинку", f"im|{ref}")]]
-        auto = bool(self.s.get("autopilot") and not sl.get("owner_only") and ((d.get("score") or 0) >= FREEDOM_MIN_SCORE or d.get("fact") == "owner")
+        need = FREEDOM_LATE_SCORE if sl.get("tries", 0) >= 3 else FREEDOM_MIN_SCORE
+        auto = bool(self.s.get("autopilot") and not sl.get("owner_only") and ((d.get("score") or 0) >= need or d.get("fact") == "owner")
                     and d.get("fact") in ("ok", "fixed", "nosearch", "owner"))
         if auto:
             head = f"🚀 Повна свобода: вийде о {when} сам (перед публікацією ще перевірю безпеку). Не так? «Не публікувати» або «Обговорити».\n" + head
@@ -1435,6 +1438,11 @@ class Bot:
                 d.pop("image", None)
         if msg_id is None:
             msg_id = self.say(f"{head}\n\n{d['text']}", buttons, important=important)
+        if not auto and msg_id is None and self.s.get("autopilot") and not getattr(self, "_reactive", 0) \
+                and not sl.get("owner_only"):
+            sl["status"], sl["draft"] = "skipped", d  # freedom: a weak post nobody approved is better not posted
+            log("свобода: слабкий пост пропущено", hhmm(sl["at"]))
+            return
         sl["msg_id"] = msg_id
         sl["status"] = "approved" if auto else "sent"
 

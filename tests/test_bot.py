@@ -565,3 +565,19 @@ class RestartTests(unittest.TestCase):
         b = make_bot(kyiv(11))
         b.owner_turn(b.on_message, {"message_id": 4, "chat": {"id": 1, "type": "private"}, "text": "тиша"})
         self.assertEqual(b.s["quiet_day"], b.today_key())
+
+
+class FreedomWeakTests(unittest.TestCase):
+    def test_late_six_goes_out_and_unseen_weak_is_skipped(self):
+        b = make_bot(kyiv(8))
+        b.s["schedule_on"], b.s["autopilot"] = True, True
+        b.talk_hours = (10, 18)
+        sl = {"id": "1122-0", "at": 700, "kind": "hook", "status": "new", "tries": 3, "rejects": 0, "v": 0,
+              "draft": {"text": GOOD, "score": 6, "fact": "ok"}}
+        b.s["days"][b.today_key()] = {"slots": [sl]}
+        b.send_draft(sl)
+        self.assertEqual(sl["status"], "approved")
+        sl2 = dict(sl, id="1122-1", status="new", tries=3, draft={"text": GOOD, "score": 6, "fact": "unchecked"})
+        b.s["days"][b.today_key()]["slots"].append(sl2)
+        b.send_draft(sl2)
+        self.assertEqual(sl2["status"], "skipped")

@@ -607,7 +607,8 @@ def factcheck(gm: Gemini, text: str, topic: str = "") -> tuple[str, str, str | N
 
 def write_post(gm: Gemini, *, today: date, sell: bool, recent: list[str], last_rubrics: list[str],
                rnd: random.Random | None = None, log=print, background: str = "", topic: str = "",
-               images: list | None = None, role: str = "", prefer: list[str] | None = None) -> dict | None:
+               images: list | None = None, role: str = "", prefer: list[str] | None = None,
+               min_score: int = MIN_SCORE) -> dict | None:
     rnd = rnd or random.Random()
     examples = load("style.json")["examples"]
     pool = load("rubrics.json")
@@ -628,8 +629,8 @@ def write_post(gm: Gemini, *, today: date, sell: bool, recent: list[str], last_r
     scores = score(gm, [v["text"] for v in passed], today, recent)
     ranked = sorted(zip(passed, scores), key=lambda x: -x[1][0])
     for v, (sc, why) in ranked:
-        if sc < MIN_SCORE:
-            log(f"  оценка {sc} < {MIN_SCORE}")
+        if sc < min_score:
+            log(f"  оценка {sc} < {min_score}")
             break
         status, text, note = factcheck(gm, v["text"], topic=topic)
         if status == "bad":
