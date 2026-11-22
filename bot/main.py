@@ -40,6 +40,21 @@ MENU_ACTIONS = {"📅 План": "menu_plan", "📊 Статистика": "menu
                 "🔥 Хайп": "menu_hype", "🎨 Картинка": "menu_draw", "💬 Коментарі": "menu_comments",
                 "⚙️ Налаштування": "menu_settings", "❓ Допомога": "menu_help", "🧠 Чат з ботом": "menu_chat",
                 "🟢 Активувати": "menu_on", "⏸ Пауза": "menu_off"}
+WORD_ACTIONS = {  # plain words, Russian or Ukrainian, without the emoji
+    "план": "menu_plan", "статистика": "menu_stats", "стата": "menu_stats", "пост": "menu_post", "пост зараз": "menu_post",
+    "пост сейчас": "menu_post", "хайп": "menu_hype", "тренды": "menu_hype", "тренди": "menu_hype", "картинка": "menu_draw",
+    "коментарі": "menu_comments", "комментарии": "menu_comments", "налаштування": "menu_settings", "настройки": "menu_settings",
+    "допомога": "menu_help", "помощь": "menu_help", "меню": "menu_help", "чат": "menu_chat", "чат з ботом": "menu_chat",
+    "чат с ботом": "menu_chat", "активувати": "menu_on", "активировать": "menu_on", "старт": "menu_on", "пауза": "menu_off"}
+
+
+def menu_word(text: str) -> str | None:
+    if text in MENU_ACTIONS:
+        return MENU_ACTIONS[text]
+    plain = re.sub(r"[^\w\s']", "", text.lower()).strip()
+    return WORD_ACTIONS.get(plain)
+
+
 COMMANDS = [("menu", "Показати меню"), ("status", "План на сьогодні"), ("stats", "Статистика Threads"),
             ("post", "Чернетка просто зараз"), ("hype", "Пост на гарячу тему"), ("draw", "Картинка з персонажами"),
             ("comments", "Нові коментарі"), ("on", "Активувати розклад"), ("off", "Пауза"),
@@ -234,9 +249,10 @@ class Bot:
             self.tg.delete(chat["id"], m["message_id"])
             self.say("Схоже на ключ або токен. Я видалив повідомлення: секрети вводяться тільки в GitHub → Settings → Secrets.")
             return
-        if text in MENU_ACTIONS:
+        action = menu_word(text) if not self.s.get("chat_mode") or text in MENU_ACTIONS else None
+        if action:
             self.s.pop("await", None)
-            return getattr(self, MENU_ACTIONS[text])()
+            return getattr(self, action)()
         reply_to = (m.get("reply_to_message") or {}).get("message_id")
         aw = self.s.get("await")
         if aw and not reply_to and not text.startswith("/"):

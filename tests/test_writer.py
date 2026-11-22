@@ -125,3 +125,13 @@ class ThreadsApiShapeTest(unittest.TestCase):
             self.assertTrue(callable(getattr(Threads, m, None)), m)
         self.assertEqual(metric_value({"total_value": {"value": 5}}), 5)
         self.assertEqual(metric_value({"values": [{"value": 2}, {"value": 3}]}), 5)
+
+
+class MenuWordTest(unittest.TestCase):
+    def test_plain_words(self):
+        from bot.main import menu_word
+        self.assertEqual(menu_word("хайп"), "menu_hype")
+        self.assertEqual(menu_word("Хайп!"), "menu_hype")
+        self.assertEqual(menu_word("🔥 Хайп"), "menu_hype")
+        self.assertEqual(menu_word("Активувати"), "menu_on")
+        self.assertIsNone(menu_word("Динамо програло"))
