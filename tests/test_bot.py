@@ -224,3 +224,21 @@ class FlowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VoiceTests(unittest.TestCase):
+    def chk(self, text):
+        return writer.check(text, sell=False, today=date(2026, 11, 22), recent=[], examples=[])
+
+    def test_voice_filters(self):
+        self.assertEqual(self.chk("Знову обстріл, а ми про дрова. Ну а що ще робити цієї ночі, скажіть?"), "тема війни")
+        self.assertEqual(self.chk("А ти знаєш, чим складометр відрізняється від насипного куба? Ото ж бо."), "звернення на «ти»")
+        self.assertIsNone(self.chk("Капець, скільки людей досі купує «куб» навалом.\nДоторкніться до правди: складометр."))
+
+    def test_quiet_day(self):
+        b = make_bot(kyiv(12))
+        b.s["schedule_on"] = True
+        b.s["quiet_day"] = b.today_key()
+        b.s["days"][b.today_key()] = {"slots": [{"id": "a", "at": 600, "kind": "hook", "status": "approved", "draft": {"text": GOOD}, "v": 1}]}
+        b.publish_due()
+        self.assertEqual(b.th.published, [])

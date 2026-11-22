@@ -19,7 +19,7 @@ STATUS_RU = {"new": "ждёт черновика", "sent": "ждёт вашег�
              "publishing": "публикуется", "published": "опубликован", "failed": "ошибка",
              "skipped": "пропущен", "expired": "не успел"}
 HELP = ("Команды:\n/status - что запланировано\n/on - включить ежедневные черновики (3 в день)\n"
-        "/off - выключить\n/preview 3 - показать N пробных постов (ничего не публикуется)\n"
+        "/off - выключить\n/tysha - тишина на сегодня (день траура или тяжёлых обстрелов)\n/preview 3 - показать N пробных постов (ничего не публикуется)\n"
         "/selftest - проверить ключи и разрешения\n\n"
         "Под черновиком кнопки: Опубликовать / Другой вариант / Пропустить. "
         "Чтобы поправить текст, ответьте (Reply) на черновик своим текстом.\n"
@@ -174,6 +174,9 @@ class Bot:
         elif cmd == "/off":
             self.s["schedule_on"] = False
             self.say("Выключено. Новые черновики не готовлю, одобренные тоже не публикую.")
+        elif cmd in ("/tysha", "/тиша", "/quiet"):
+            self.s["quiet_day"] = self.today_key()
+            self.say("Тишина до конца дня: ничего не публикую и не присылаю черновики. Завтра продолжу сам.")
         elif cmd == "/preview":
             n = int(arg) if arg.strip().isdigit() else 3
             self.preview(max(1, min(n, 5)))
@@ -254,8 +257,11 @@ class Bot:
     def time_left(self) -> bool:
         return time.monotonic() - self.started < TIME_BUDGET
 
+    def quiet(self) -> bool:
+        return self.s.get("quiet_day") == self.today_key()
+
     def draft_pending(self) -> None:
-        if not self.s["schedule_on"] or self.s.get("paused_reason") or not self.gm:
+        if not self.s["schedule_on"] or self.s.get("paused_reason") or not self.gm or self.quiet():
             return
         made = 0
         for sl in self.slots():
@@ -304,7 +310,7 @@ class Bot:
 
     # ---------- publishing
     def publish_due(self) -> None:
-        if not self.th or not self.s["schedule_on"] or self.s.get("paused_reason"):
+        if not self.th or not self.s["schedule_on"] or self.s.get("paused_reason") or self.quiet():
             return
         now_min = minutes_of(self.now)
         if now_min > LAST_PUBLISH_MIN:
@@ -349,6 +355,8 @@ class Bot:
     # ---------- owner tools
     def status_text(self) -> str:
         lines = [f"Ежедневные черновики: {'включены' if self.s['schedule_on'] else 'выключены (/on)'}"]
+        if self.quiet():
+            lines.append("Сегодня тишина (/tysha), завтра продолжу.")
         if self.s.get("paused_reason"):
             lines.append(f"Пауза: {self.s['paused_reason']} (включить: /on)")
         sl = self.slots()
