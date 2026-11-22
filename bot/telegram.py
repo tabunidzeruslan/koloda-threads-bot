@@ -28,6 +28,13 @@ class Telegram:
             raise net.NetError(200, res)
         return res.get("result") or []
 
+    def set_webhook(self, url: str, secret: str) -> None:
+        self.call("setWebhook", url=url, secret_token=secret, allowed_updates=["message", "callback_query"],
+                  drop_pending_updates=False)
+
+    def delete_webhook(self) -> None:
+        self.call("deleteWebhook", drop_pending_updates=False)
+
     def set_commands(self, commands: list[tuple[str, str]]) -> None:
         self.call("setMyCommands", commands=[{"command": c, "description": d} for c, d in commands])
 

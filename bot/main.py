@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+from pathlib import Path
 import os
 import random
 import re
@@ -10,6 +12,7 @@ import time
 from datetime import date, datetime
 
 from . import chat, crypto, meme, net, state as st, trends, writer
+from . import relay as relay_mod
 from .cfai import CFText
 from .images import Images
 from .gemini import Gemini
@@ -110,6 +113,7 @@ def secret_shapes() -> list[str]:
         out.append(f"{'✅' if not issues else '⚠️'} {name}: довжина {len(v)}" + (f", {'; '.join(issues)}" if issues else ""))
 
     shape("CF_ACCOUNT_ID", lambda v: bool(_re.fullmatch(r"[0-9a-f]{32}", v)), "очікується 32 символи 0-9 a-f (Account ID)")
+    shape("DISPATCH_TOKEN", lambda v: v.startswith(("github_pat_", "ghp_")), "ключ GitHub має починатися з github_pat_")
     shape("CF_API_TOKEN", lambda v: 35 <= len(v) <= 60 and bool(_re.fullmatch(r"[A-Za-z0-9_\-]+", v)) and not _re.fullmatch(r"[0-9a-f]{32}", v),
           "не схоже на API Token Cloudflare (зазвичай 40 символів; не плутати з Account ID і Global API Key)")
     return out
@@ -134,6 +138,7 @@ class Bot:
         if chat_id_env.strip().lstrip("-").isdigit():
             self.s["owner_chat_id"] = int(chat_id_env)
         self.th = Threads(self.threads_token()) if threads_secret else None
+        self.relay = None  # Cloudflare Worker queue, set in main() when deployed
         writer.set_owner(self.s.get("owner_rules", []), self.s.get("owner_facts", []))
 
     # ---------- helpers
@@ -212,6 +217,8 @@ class Bot:
     def handle_updates(self, wait: int = 0) -> int:
         if not self.tg:
             return 0
+        if self.relay:
+            return self.handle_relay()
         try:
             ups = self.tg.updates(self.s.get("tg_offset"), wait=wait)
         except net.NetError as e:
@@ -231,6 +238,34 @@ class Bot:
                 self.tg.updates(self.s["tg_offset"])
             except net.NetError:
                 pass
+        return len(ups)
+
+    def handle_relay(self) -> int:
+        try:
+            ups = sorted(self.relay.updates(), key=lambda u: u.get("update_id", 0))
+        except Exception as e:
+            log("relay updates failed:", e)
+            return 0
+        done = []
+        seen = set(self.s.get("relay_seen", []))
+        for u in ups:
+            uid = u.get("update_id")
+            done.append(uid)
+            if uid in seen:
+                continue  # already handled, ack was lost
+            seen.add(uid)
+            try:
+                if "callback_query" in u:
+                    self.on_callback(u["callback_query"])
+                elif "message" in u:
+                    self.on_message(u["message"])
+            except Exception as e:
+                log("update error:", e)
+        self.s["relay_seen"] = sorted(seen)[-200:]
+        try:
+            self.relay.ack(done)
+        except Exception as e:
+            log("relay ack failed:", e)
         return len(ups)
 
     def on_message(self, m: dict) -> None:
@@ -804,6 +839,8 @@ class Bot:
         """Keep answering Telegram for a few minutes with long polling, so buttons react within seconds."""
         end = time.monotonic() + seconds
         while time.monotonic() < end - 5:
+            if self.relay:
+                time.sleep(3)
             n = self.handle_updates(wait=int(min(25, end - time.monotonic())))
             self.check_comments()
             if n:
@@ -1354,7 +1391,7 @@ class Bot:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--task", default="tick", choices=["tick", "selftest", "preview", "trends", "hype", "draw"])
+    ap.add_argument("--task", default="tick", choices=["tick", "selftest", "preview", "trends", "hype", "draw", "deploy"])
     ap.add_argument("--state", default=".state/state.json")
     ap.add_argument("--n", type=int, default=3)
     a = ap.parse_args(argv)
@@ -1373,6 +1410,31 @@ def main(argv=None) -> int:
               gm=gm,
               threads_secret=th_token, enc_key=enc_key, chat_id_env=net.env("TELEGRAM_CHAT_ID"),
               persist=lambda: st.save(a.state, s, enc_key if enc_key != "no-key" else ""))
+    cf_acc, cf_tok = net.env("CF_ACCOUNT_ID"), clean_token(net.env("CF_API_TOKEN"))
+    if a.task == "deploy":
+        try:
+            script = (Path(__file__).resolve().parent.parent / "worker" / "worker.js").read_text(encoding="utf-8")
+            u = relay_mod.deploy(cf_acc, cf_tok, tg_token=tg_token, dispatch_token=net.env("DISPATCH_TOKEN"),
+                                 repo=os.environ.get("GITHUB_REPOSITORY", ""), script=script, log=log)
+            r = relay_mod.Relay(u, tg_token)
+            for _ in range(10):
+                if r.healthy():
+                    break
+                time.sleep(3)
+            if not r.healthy():
+                raise RuntimeError("Worker не відповідає на /health")
+            bot.handle_updates()  # take what is waiting in getUpdates before switching to the webhook
+            bot.tg.set_webhook(u + "/tg", relay_mod.derive(tg_token, "webhook"))
+            s["relay_url"] = u
+            bot.say("⚡ Швидкі відповіді увімкнено: тепер бот прокидається одразу після вашого повідомлення "
+                    "і відповідає приблизно за 30–60 секунд.")
+        except Exception as e:
+            bot.say(f"⚠️ Не вдалося встановити Worker: {net.scrub(str(e))[:300]}")
+            log("deploy failed:", e)
+        st.save(a.state, s, enc_key if enc_key != "no-key" else "")
+        return 0
+    if s.get("relay_url") and tg_token:
+        bot.relay = relay_mod.Relay(s["relay_url"], tg_token)
     try:
         if a.task == "tick":
             bot.tick()

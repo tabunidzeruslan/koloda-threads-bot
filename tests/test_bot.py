@@ -347,3 +347,31 @@ class ActivateButtonTest(unittest.TestCase):
         self.assertEqual(b.menu_kb()[0], ["⏸ Пауза"])
         b.on_message({"message_id": 11, "chat": {"id": 1, "type": "private"}, "text": "⏸ Пауза"})
         self.assertFalse(b.s["schedule_on"])
+
+
+class ChatAndRelayTests(unittest.TestCase):
+    def test_chat_turn_proposes_and_applies_rule(self):
+        b = make_bot(kyiv(10))
+        b.gm.generate = mock.Mock(return_value='{"reply": "Ок", "changes": [{"type": "rule_add", "text": "без сосни"}]}')
+        b.chat_turn("не пиши про сосну")
+        pend = b.s["chat_pending"]
+        b.on_menu(f"apply|{pend['id']}")
+        self.assertEqual(b.s["owner_rules"], ["без сосни"])
+
+    def test_chat_focus_edit_text(self):
+        b = make_bot(kyiv(10))
+        b.s["days"][b.today_key()] = {"slots": [{"id": "1122-0", "at": 700, "kind": "hook", "status": "sent", "tries": 1,
+                                                 "rejects": 0, "v": 1, "msg_id": 5, "draft": {"text": "старий", "score": 8, "fact": "ok"}}]}
+        b.s["chat_focus"] = "1122-0"
+        b.gm.generate = mock.Mock(return_value='{"reply": "Зробив", "changes": [{"type": "edit_text", "text": "новий текст"}]}')
+        b.chat_turn("зроби смішніше")
+        self.assertEqual(b.find_slot("1122-0")["draft"]["text"], "новий текст")
+
+    def test_relay_updates_and_ack(self):
+        b = make_bot(kyiv(10))
+        r = mock.Mock()
+        r.updates.return_value = [{"update_id": 7, "message": {"chat": {"id": 1, "type": "private"}, "text": "план", "message_id": 3}}]
+        b.relay = r
+        self.assertEqual(b.handle_updates(), 1)
+        r.ack.assert_called_with([7])
+        self.assertEqual(b.handle_relay(), 1)  # same update again (lost ack) is not handled twice

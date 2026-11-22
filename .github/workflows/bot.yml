@@ -10,7 +10,7 @@ on:
       task:
         description: "tick = обычный запуск, selftest = проверка ключей, preview = пробные посты, trends = пост по тренду сейчас, hype = пост на тему из поля topic, draw = картинка на тему topic"
         type: choice
-        options: [tick, selftest, preview, trends, hype, draw]
+        options: [tick, selftest, preview, trends, hype, draw, deploy]
         default: tick
       n:
         description: "Сколько пробных постов (для preview)"
@@ -60,6 +60,7 @@ jobs:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           GH_MEDIA_TOKEN: ${{ github.token }}
           BOT_TOPIC: ${{ inputs.topic }}
+          DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
         run: python3 -m bot.main --task "${{ inputs.task || 'tick' }}" --n "${{ inputs.n || '3' }}"
 
       - name: Save state
