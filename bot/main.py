@@ -607,8 +607,12 @@ class Bot:
                 return f"{res['provider']}, {len(res['bytes']) // 1024} КБ"
             out.append(f"ℹ️ Генераторы картинок: {', '.join(self.images.providers())}")
             chk("Картинка", img_test)
-            out.append(("✅ Хранилище картинок: " + self.images.media_repo) if self.images.can_host
-                       else "⚠️ Нет секрета MEDIA_TOKEN: картинки с Cloudflare не опубликовать")
+            if self.images.can_host:
+                chk("Хранилище картинок", lambda: self.images.media_repo + (" (публичное)" if not net.request(
+                    "GET", f"https://api.github.com/repos/{self.images.media_repo}",
+                    headers={"Authorization": f"Bearer {self.images.media_token}"}).get("private") else " ⚠️ репозиторий приватный, нужен Public"))
+            else:
+                out.append("⚠️ Нет секрета MEDIA_TOKEN: картинки не опубликовать")
         return "\n".join(out)
 
     def preview(self, n: int) -> None:

@@ -11,7 +11,7 @@ from . import media, net
 
 class Images:
     def __init__(self, *, cf_account: str = "", cf_token: str = "", gemini=None, media_repo: str = "",
-                 media_token: str = "", pollinations: bool = True):
+                 media_token: str = "", pollinations: bool = False):
         self.cf_account, self.cf_token = cf_account, cf_token
         self.gemini = gemini
         self.media_repo, self.media_token = media_repo, media_token
