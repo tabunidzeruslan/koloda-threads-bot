@@ -489,6 +489,12 @@ class Bot:
                 chk("Gemini, поиск Google", lambda: (self.gm.generate("Яка столиця України? Одне слово.", search=True, temperature=0)[:30]))
                 if self.gm.model:
                     self.s["gemini_model"] = self.gm.model
+                chk("Gemini, модели картинок", lambda: ", ".join(self.gm.image_models()[:3]) or "нет")
+
+                def img_test():
+                    mime, b64 = self.gm.image("A minimalist black ink line drawing of a single firewood log on a pure white background.")
+                    return f"{self.gm.image_model}, {len(b64) * 3 // 4 // 1024} КБ"
+                chk("Gemini, генерация картинки", img_test)
         else:
             out.append("❌ Нет секрета GEMINI_API_KEY")
         return "\n".join(out)

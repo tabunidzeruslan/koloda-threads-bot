@@ -30,9 +30,36 @@ class Gemini:
         self.preferred = preferred
         self.model: str | None = None
         self._models: list[str] | None = None
+        self._all: list[str] = []
+        self.image_model: str | None = None
 
     def _h(self) -> dict:
         return {"x-goog-api-key": self.key}
+
+    def image_models(self) -> list[str]:
+        self.list_models()
+        pool = [n for n in self._all if "image" in n and "gemini" in n]
+        return sorted(pool, key=lambda n: (-(float(m.group(1)) if (m := re.search(r"gemini-(\d+(?:\.\d+)?)", n)) else 0),
+                                           "preview" in n, n))
+
+    def image(self, prompt: str) -> tuple[str, str]:
+        """Generate one image. Returns (mime, base64)."""
+        body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]}}
+        last: Exception | None = None
+        for model in self.image_models()[:3]:
+            try:
+                res = net.request("POST", f"{BASE}/models/{model}:generateContent", json_body=body,
+                                  headers=self._h(), timeout=120)
+                for p in res["candidates"][0]["content"]["parts"]:
+                    d = p.get("inlineData") or p.get("inline_data")
+                    if d and d.get("data"):
+                        self.image_model = model
+                        return d.get("mimeType") or d.get("mime_type") or "image/png", d["data"]
+                last = RuntimeError("модель не вернула картинку")
+            except (net.NetError, KeyError, IndexError) as e:
+                last = e
+        raise RuntimeError(f"картинка не получилась: {last}")
 
     def list_models(self) -> list[str]:
         if self._models is None:
@@ -46,6 +73,7 @@ class Gemini:
                 token = res.get("nextPageToken")
                 if not token:
                     break
+            self._all = names
             ranked = rank_models(names)
             if self.preferred in ranked:
                 ranked.remove(self.preferred)
