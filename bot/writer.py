@@ -118,6 +118,13 @@ SYSTEM = """Ти пишеш пости для Threads від імені київ
 - Не представляйся («Привіт, я…»)."""
 
 
+def rules() -> dict:
+    try:
+        return load("writing_rules.json")
+    except (OSError, ValueError):
+        return {}
+
+
 def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[str], background: str = "",
                  topic: str = "") -> str:
     biz, facts, style = load("business.json"), load("facts.json"), load("style.json")
@@ -132,11 +139,19 @@ def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[st
         "Приклади тону (не копіюй, лише стиль): " + json.dumps(style["examples"], ensure_ascii=False),
         "Недавні пости (не повторюй теми і жарти): " + json.dumps(recent[-12:], ensure_ascii=False),
     ]
+    r = rules()
+    if r:
+        lines.append("Правила Threads-поста: " + json.dumps(r.get("threads_post", []), ensure_ascii=False))
+        lines.append("Гачки (обери доречний): " + json.dumps(r.get("hooks", []), ensure_ascii=False))
+        lines.append("ЛОГІКА (порушення = пост у смітник): " + json.dumps(r.get("logic", []), ensure_ascii=False))
     if background:
         lines.append("Контекст дня (можна використати, не обовʼязково): " + background)
     if topic:
         lines.append("ГОЛОВНА ТЕМА всіх 4 варіантів (інфопривід, реакція на хайп): " + topic +
-                     "\nЗроби дотепну реакцію з містком до дров, тепла, дому чи чесного обʼєму. Не вигадуй деталей події, "
+                     "\nЗроби дотепну реакцію з ЛОГІЧНИМ містком до дров, тепла, дому чи чесного обʼєму: спільне почуття, "
+                     "та сама ситуація або аналогія, що тримається. Не просто «сталося X, а в нас дрова». Рецепти: " +
+                     json.dumps(rules().get("trend_bridges", []), ensure_ascii=False) + "\n"
+                     "Пиши з позиції вболівальника/співчуття, без злорадства. Не вигадуй деталей події, "
                      "яких немає в описі. Не ображай людей з новини. Якщо тема про смерть, війну, трагедію, політику "
                      "або релігію, поверни {\"variants\": []}.")
     if sell:
@@ -163,12 +178,15 @@ def generate_variants(gm: Gemini, *, today: date, rubrics: list[str], sell: bool
 
 EDITOR = """Ти суворий редактор постів у Threads. Оціни кожен пост від 1 до 10 за критеріями:
 гачок у першому рядку; зухвалість і сарказм без образ людей (образи, мат, жарти про війну чи обстріли = оцінка 1); хочеться відповісти або посперечатися; звучить як людина, а не маркетолог чи ШІ;
-немає вигаданих фактів, цифр, випадків; не повторює недавні пости; короткий; відповідає сезону; без помилок української мови.
+логічний: є одна ясна думка, зв'язок між темою і дровами має сенс, а не просто стоїть поруч (нелогічний = не вище 4); немає вигаданих фактів, цифр, випадків; не повторює недавні пости; короткий; відповідає сезону; без помилок української мови.
 Відповідь тільки JSON: {"scores": [{"i": 0, "score": 8, "why": "коротко"}]}"""
 
 
 def score(gm: Gemini, texts: list[str], today: date, recent: list[str]) -> list[tuple[int, str]]:
-    prompt = (f"Дата: {today.isoformat()}, сезон: {season(today)}.\nНедавні пости: {json.dumps(recent[-8:], ensure_ascii=False)}\n"
+    checks = rules().get("editor_checks", [])
+    logic = ("Перевірка логіки (якщо хоч одна відповідь погана, оцінка не вище 4): " +
+             json.dumps(checks, ensure_ascii=False) + "\n") if checks else ""
+    prompt = (logic +f"Дата: {today.isoformat()}, сезон: {season(today)}.\nНедавні пости: {json.dumps(recent[-8:], ensure_ascii=False)}\n"
               "Пости:\n" + "\n".join(f"{i}: {t}" for i, t in enumerate(texts)))
     data = parse_json(gm.generate(prompt, system=EDITOR, json_mode=True, temperature=0.2))
     res = [(0, "")] * len(texts)
@@ -216,19 +234,20 @@ def pick_trend(gm: Gemini, trends: list[dict], used: list[str]) -> dict | None:
     return {"title": t["title"], "topic": f"{t['title']}: {data.get('topic', '')}", "url": link}
 
 
-def factcheck(gm: Gemini, text: str) -> tuple[str, str, str | None]:
+def factcheck(gm: Gemini, text: str, topic: str = "") -> tuple[str, str, str | None]:
     """Returns (status, text, note). status: ok | fixed | bad | unchecked."""
     current = text
+    given = (f"Інфопривід від власника акаунта (вважай правдою, не перевіряй): {topic[:400]}\n") if topic else ""
     search_ok = True
     for round_ in range(3):
         try:
-            data = parse_json(gm.generate(f"Пост:\n{current}", system=FACTCHECK if search_ok else FACTCHECK_NOSEARCH,
+            data = parse_json(gm.generate(f"{given}Пост:\n{current}", system=FACTCHECK if search_ok else FACTCHECK_NOSEARCH,
                                           search=search_ok, temperature=0.1))
         except Exception as e:  # search quota / unsupported model / bad JSON
             if search_ok:
                 search_ok = False  # free tier often has no Google Search quota: check by model knowledge
                 try:
-                    data = parse_json(gm.generate(f"Пост:\n{current}", system=FACTCHECK_NOSEARCH, temperature=0.1))
+                    data = parse_json(gm.generate(f"{given}Пост:\n{current}", system=FACTCHECK_NOSEARCH, temperature=0.1))
                 except Exception as e2:
                     return "unchecked", current, f"перевірка фактів не вдалася: {str(e2)[:120]}"
             else:
@@ -268,7 +287,7 @@ def write_post(gm: Gemini, *, today: date, sell: bool, recent: list[str], last_r
         if sc < MIN_SCORE:
             log(f"  оценка {sc} < {MIN_SCORE}")
             break
-        status, text, note = factcheck(gm, v["text"])
+        status, text, note = factcheck(gm, v["text"], topic=topic)
         if status == "bad":
             log(f"  факты: {note}")
             continue

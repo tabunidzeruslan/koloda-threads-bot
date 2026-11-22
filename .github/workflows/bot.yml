@@ -7,13 +7,16 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: "tick = обычный запуск, selftest = проверка ключей, preview = пробные посты, trends = пост по тренду сейчас"
+        description: "tick = обычный запуск, selftest = проверка ключей, preview = пробные посты, trends = пост по тренду сейчас, hype = пост на тему из поля topic, draw = картинка на тему topic"
         type: choice
-        options: [tick, selftest, preview, trends]
+        options: [tick, selftest, preview, trends, hype, draw]
         default: tick
       n:
         description: "Сколько пробных постов (для preview)"
         default: "3"
+      topic:
+        description: "Тема для hype или draw"
+        default: ""
 
 permissions:
   contents: write
@@ -52,6 +55,7 @@ jobs:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           GH_MEDIA_TOKEN: ${{ github.token }}
+          BOT_TOPIC: ${{ inputs.topic }}
         run: python3 -m bot.main --task "${{ inputs.task || 'tick' }}" --n "${{ inputs.n || '3' }}"
 
       - name: Save state

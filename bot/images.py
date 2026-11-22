@@ -6,7 +6,13 @@ import random
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
+from pathlib import Path
+
 from . import media, net
+
+REF_DIR = Path(__file__).resolve().parent.parent / "data" / "ref"
+REF_MODEL = "@cf/black-forest-labs/flux-2-klein-4b"   # FLUX.2 takes reference images, keeps the face and outfit
+FAST_MODEL = "@cf/black-forest-labs/flux-1-schnell"
 
 
 SAFE_PROMPT = ("A stocky smiling man with a grey mustache in a black puffer vest stands next to a neat "
@@ -43,6 +49,13 @@ class Images:
         for p in self.providers():
             try:
                 if p == "cloudflare":
+                    refs = self.references()
+                    if refs:
+                        try:
+                            return {"bytes": self._cloudflare_ref(prompt, refs), "provider": "cloudflare-ref", "url": ""}
+                        except Exception as e:
+                            errors.append(f"cloudflare-ref: {net.scrub(str(e))[:160]}")
+                            log("reference model failed, falling back:", errors[-1])
                     try:
                         data = self._cloudflare(prompt)
                     except Exception as e:
@@ -62,9 +75,26 @@ class Images:
                 log("image provider failed:", errors[-1])
         raise RuntimeError("; ".join(errors) or "нет доступных генераторов")
 
+    @staticmethod
+    def references() -> list[Path]:
+        return sorted(REF_DIR.glob("*.png"))[:4] if REF_DIR.exists() else []
+
+    def _cloudflare_ref(self, prompt: str, refs: list[Path]) -> bytes:
+        lead = ("Use the man from the reference images as the main character: keep exactly the same face, grey hair, "
+                "bushy grey mustache, body shape and outfit (black puffer vest with orange KOLODA, orange shirt, brown "
+                "cargo trousers, dark boots). New scene: ")
+        body, ctype = net.multipart(
+            {"prompt": (lead + prompt)[:2000], "width": "1024", "height": "1024"},
+            {f"input_image_{i}": (r.name, "image/png", r.read_bytes()) for i, r in enumerate(refs)})
+        res = net.request_raw("POST", f"https://api.cloudflare.com/client/v4/accounts/{self.cf_account}/ai/run/{REF_MODEL}",
+                              body, ctype, timeout=180, headers={"Authorization": f"Bearer {self.cf_token}"})
+        img = (res.get("result") or {}).get("image") or res.get("image")
+        if not img:
+            raise RuntimeError(f"нет картинки в ответе: {str(res)[:150]}")
+        return base64.b64decode(img)
+
     def _cloudflare(self, prompt: str) -> bytes:
-        res = net.request("POST", f"https://api.cloudflare.com/client/v4/accounts/{self.cf_account}/ai/run/"
-                                  "@cf/black-forest-labs/flux-1-schnell",
+        res = net.request("POST", f"https://api.cloudflare.com/client/v4/accounts/{self.cf_account}/ai/run/{FAST_MODEL}",
                           json_body={"prompt": prompt[:2000], "steps": 8},
                           headers={"Authorization": f"Bearer {self.cf_token}"}, timeout=120)
         return base64.b64decode(res["result"]["image"])

@@ -551,7 +551,8 @@ class Bot:
             self.tg.edit(self.owner, sl["msg_id"], f"🟢 Опубликовано {res.get('permalink', '')}\n\n{text}")
 
     # ---------- hype
-    def make_hype(self, topic: str, *, url: str, images: list | None = None, source: str = "") -> bool:
+    def make_hype(self, topic: str, *, url: str, images: list | None = None, source: str = "",
+                  want_image: bool = False) -> bool:
         if not self.gm:
             return False
         key = self.today_key()
@@ -559,7 +560,7 @@ class Bot:
         n = sum(1 for x in day["slots"] if x["kind"] == "hype")
         sl = {"id": f"{key[5:7]}{key[8:]}-h{n}", "at": minutes_of(self.now), "kind": "hype", "status": "new",
               "tries": 1, "rejects": 0, "v": 0, "draft": None, "msg_id": None, "topic": topic[:600],
-              "url": url, "source": source}
+              "url": url, "source": source, "want_image": want_image}
         post = self.write(False, topic=sl["topic"], images=images)
         if not post:
             if source.startswith("ваш"):
@@ -712,7 +713,7 @@ class Bot:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--task", default="tick", choices=["tick", "selftest", "preview", "trends"])
+    ap.add_argument("--task", default="tick", choices=["tick", "selftest", "preview", "trends", "hype", "draw"])
     ap.add_argument("--state", default=".state/state.json")
     ap.add_argument("--n", type=int, default=3)
     a = ap.parse_args(argv)
@@ -739,6 +740,14 @@ def main(argv=None) -> int:
                 bot.say(bot.selftest())
             elif a.task == "trends":
                 bot.check_trends(force=True)
+            elif a.task in ("hype", "draw"):
+                topic = os.environ.get("BOT_TOPIC", "").strip()
+                if not topic:
+                    bot.say("Не задана тема (поле topic).")
+                elif a.task == "hype":
+                    bot.make_hype(topic, url="", source="ваш тест", want_image=True)
+                else:
+                    bot.draw(topic)
             else:
                 bot.preview(max(1, min(a.n, 5)))
     finally:

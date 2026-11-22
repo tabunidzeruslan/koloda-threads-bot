@@ -81,9 +81,10 @@ def multipart(fields: dict, files: dict) -> tuple[bytes, str]:
     return bytes(out), f"multipart/form-data; boundary={boundary}"
 
 
-def request_raw(method: str, url: str, data: bytes, content_type: str, timeout: float = 60) -> dict:
+def request_raw(method: str, url: str, data: bytes, content_type: str, timeout: float = 60,
+                headers: dict | None = None) -> dict:
     req = Request(url, data=data, method=method, headers={"Content-Type": content_type,
-                                                          "User-Agent": "koloda-threads-bot/1.0"})
+                                                          "User-Agent": "koloda-threads-bot/1.0", **(headers or {})})
     try:
         with urlopen(req, timeout=timeout) as r:
             raw, status = r.read(), r.status
