@@ -1910,6 +1910,7 @@ class Bot:
         self.learn()
         self.maybe_refresh_token()
         self.s["last_run"] = self.now.isoformat()
+        log("план:", " ".join(f"{hhmm(x['at'])}={x['status']}" for x in self.slots()), "| постів:", len(self.s["posts"]))
 
 
 def main(argv=None) -> int:
