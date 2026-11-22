@@ -74,6 +74,10 @@ AWAIT_MINUTES = 20
 LISTEN_SECONDS = 60  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
 MAX_GEN_PER_RUN = 2
 IMAGE_EVERY_DAYS = 3  # at most one automatic picture in 3 days
+OAUTH_APP_ID = os.environ.get("THREADS_APP_ID", "1152144817371787")  # Koloda Threads Bot (public id)
+OAUTH_REDIRECT = "https://koloda.ua/auth/"
+OAUTH_SCOPES = ["threads_basic", "threads_content_publish", "threads_manage_replies", "threads_read_replies",
+                "threads_manage_insights", "threads_keyword_search"]
 TALK_FROM, TALK_TO = 10, 18  # owner: the bot writes first only between 10:00 and 18:00 Kyiv
 MAX_AUTO_IMAGES_PER_DAY = 1  # owner: at most one picture a day for all posts together, only if really needed
 MAX_HYPE_IMAGES_PER_DAY = 1  # plus one for a trend post
@@ -262,6 +266,39 @@ class Bot:
             self.s["token"] = {"src_fp": fp, "enc": None, "refreshed_at": None, "first_seen": self.now.isoformat()}
         return self.threads_secret
 
+    def oauth_link(self) -> str:
+        from urllib.parse import urlencode
+        return "https://threads.net/oauth/authorize?" + urlencode({
+            "client_id": OAUTH_APP_ID, "redirect_uri": OAUTH_REDIRECT, "response_type": "code",
+            "scope": ",".join(OAUTH_SCOPES)})
+
+    def oauth_code(self, text: str) -> None:
+        """The owner pasted the koloda.ua/auth/?code=... address after allowing the app in Threads."""
+        from urllib.parse import parse_qs, urlparse
+        code = (parse_qs(urlparse(text.strip().split()[0]).query).get("code") or [""])[0].split("#")[0]
+        secret = os.environ.get("THREADS_APP_SECRET", "").strip()
+        if not code:
+            return self.say("Не бачу коду в посиланні. Скопіюйте повну адресу сторінки після дозволу.")
+        if not secret:
+            return self.say("Немає секрету THREADS_APP_SECRET у GitHub. Додайте його і надішліть посилання ще раз "
+                            "(код діє близько години).")
+        net.register_secret(code)
+        try:
+            res = Threads.exchange_code(OAUTH_APP_ID, secret, OAUTH_REDIRECT, code)
+        except Exception as e:
+            return self.say(f"Не вдалося отримати токен: {net.scrub(str(e))[:300]}\nСпробуйте пройти посилання ще раз.")
+        new = res.get("access_token", "")
+        if not new:
+            return self.say("Threads не видав токен. Спробуйте пройти посилання ще раз.")
+        net.register_secret(new)
+        self.s["token"] = {"src_fp": crypto.fingerprint(self.threads_secret), "enc": crypto.encrypt(new, self.enc_key),
+                           "refreshed_at": self.now.isoformat(), "expires_in": res.get("expires_in"),
+                           "first_seen": self.now.isoformat(), "oauth": True}
+        self.th = Threads(new)
+        sc = self.th.token_scopes()
+        self.say("Новий токен Threads збережено (зашифровано)." + (f" Права: {', '.join(sc)}" if sc else "")
+                 + "\nТепер напишіть «клієнти».")
+
     def maybe_refresh_token(self) -> None:
         if not self.th:
             return
@@ -365,6 +402,9 @@ class Bot:
             return
         if chat["id"] != self.owner:
             return
+        if "code=" in text and "koloda.ua/auth" in text:
+            self.tg.delete(chat["id"], m["message_id"])
+            return self.oauth_code(text)
         if re.fullmatch(r"[A-Za-z0-9_\-:.]{60,}", text):
             self.tg.delete(chat["id"], m["message_id"])
             self.say("Схоже на ключ або токен. Я видалив повідомлення: секрети вводяться тільки в GitHub → Settings → Secrets.")
@@ -434,6 +474,9 @@ class Bot:
             self.draw(arg.strip() or (m.get("reply_to_message") or {}).get("text") or "")
         elif cmd in ("/clients", "/клієнти", "/клиенты"):
             self.find_buyers(force=True)
+        elif cmd in ("/login", "/token"):
+            self.say("Відкрийте посилання, дозвольте все, а потім скопіюйте адресу сторінки, куди вас перекине "
+                     "(koloda.ua/auth/?code=...), і надішліть її сюди:\n" + self.oauth_link())
         elif cmd == "/trends":
             self.check_trends(force=True)
         elif cmd in ("/tysha", "/тиша", "/quiet"):

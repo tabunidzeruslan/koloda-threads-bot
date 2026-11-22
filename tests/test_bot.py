@@ -561,3 +561,18 @@ class BuyerWordTests(unittest.TestCase):
         b.owner_turn(b.on_message, {"message_id": 5, "chat": {"id": 1, "type": "private"}, "text": "клієнти"})
         b.th.keyword_search.assert_called()
         self.assertTrue(any("не знайшов" in str(x) for x in b.tg.sent))
+
+
+class OAuthTests(unittest.TestCase):
+    def test_pasted_redirect_saves_token(self):
+        b = make_bot(kyiv(4))
+        b.tg.delete = mock.Mock()
+        with mock.patch.dict("os.environ", {"THREADS_APP_SECRET": "appsecret123"}), \
+                mock.patch("bot.main.Threads.exchange_code", return_value={"access_token": "NEWTOKEN_abcdefgh123", "expires_in": 5}) as ex, \
+                mock.patch("bot.main.Threads.token_scopes", return_value=["threads_keyword_search"]):
+            b.owner_turn(b.on_message, {"message_id": 9, "chat": {"id": 1, "type": "private"},
+                                        "text": "https://koloda.ua/auth/?code=AQBxyz#_"})
+        self.assertEqual(ex.call_args[0][3], "AQBxyz")
+        self.assertEqual(b.threads_token(), "NEWTOKEN_abcdefgh123")
+        b.tg.delete.assert_called()
+        self.assertTrue(any("threads_keyword_search" in str(x) for x in b.tg.sent))

@@ -105,6 +105,17 @@ class Threads:
             pass
         return {"id": post_id, "permalink": link}
 
+    @staticmethod
+    def exchange_code(app_id: str, app_secret: str, redirect_uri: str, code: str) -> dict:
+        """OAuth: authorization code -> short-lived token -> long-lived (60 days) token with the asked scopes."""
+        net.register_secret(app_secret)
+        short = net.request("POST", "https://graph.threads.net/oauth/access_token", form={
+            "client_id": app_id, "client_secret": app_secret, "grant_type": "authorization_code",
+            "redirect_uri": redirect_uri, "code": code})["access_token"]
+        net.register_secret(short)
+        return net.request("GET", "https://graph.threads.net/access_token", params={
+            "grant_type": "th_exchange_token", "client_secret": app_secret, "access_token": short})
+
     def refresh(self) -> dict:
         return net.request("GET", "https://graph.threads.net/refresh_access_token",
                            params={"grant_type": "th_refresh_token", "access_token": self.token})

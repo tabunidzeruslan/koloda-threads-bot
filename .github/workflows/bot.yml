@@ -61,6 +61,7 @@ jobs:
           GH_MEDIA_TOKEN: ${{ github.token }}
           BOT_TOPIC: ${{ inputs.topic }}
           DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+          THREADS_APP_SECRET: ${{ secrets.THREADS_APP_SECRET }}
         run: python3 -m bot.main --task "${{ inputs.task || 'tick' }}" --n "${{ inputs.n || '3' }}"
 
       - name: Save state
