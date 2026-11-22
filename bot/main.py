@@ -60,7 +60,7 @@ COMMANDS = [("menu", "Показати меню"), ("status", "План на с�
             ("comments", "Нові коментарі"), ("on", "Активувати розклад"), ("off", "Пауза"),
             ("tysha", "Тиша на сьогодні"), ("selftest", "Перевірка"), ("help", "Допомога")]
 AWAIT_MINUTES = 20
-LISTEN_SECONDS = 240  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
+LISTEN_SECONDS = 480  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
 MAX_GEN_PER_RUN = 2
 MAX_AUTO_IMAGES_PER_DAY = 1  # the bot decides itself which post deserves a picture
 MAX_HYPE_IMAGES_PER_DAY = 1  # plus one for a trend post

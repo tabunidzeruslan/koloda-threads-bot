@@ -22,6 +22,7 @@ on:
 permissions:
   contents: write
   issues: write
+  actions: write
 
 concurrency:
   group: bot
@@ -78,3 +79,15 @@ jobs:
             git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:state && break
             sleep $((i * 5))
           done
+
+      - name: Keep listening (next run)
+        # GitHub cron is often late by 10-30 min. During the day the bot starts its next run itself,
+        # so Telegram buttons always answer within seconds. At night the cron (every 5 min) is enough.
+        if: always() && (github.event_name == 'schedule' || inputs.task == 'tick')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          h=$(TZ=Europe/Kyiv date +%H)
+          if [ "$h" -ge 7 ] && [ "$h" -le 22 ]; then
+            gh workflow run bot.yml --repo "$GITHUB_REPOSITORY" --ref main -f task=tick || echo "dispatch failed, cron will pick up"
+          fi
