@@ -29,7 +29,6 @@ HELP = ("Меню внизу чату:\n"
         "Активувати / Пауза: увімкнути або зупинити публікації\n"
         "Повна свобода / Стоп свободи: бот сам планує і публікує, пише вам тільки коли сумнівається, з 10:00 до 18:00\n\n"
         "Можна писати словами:\n"
-        "клієнти: знайти в Threads людей, які шукають дрова (відповідаєте ви самі)\n"
         "статистика: перегляди, лайки, підписники за 7 днів\n"
         "чат: обговорити пост або дати боту нове правило\n"
         "тиша: нічого не публікувати до кінця дня (команда /tysha)\n\n"
@@ -37,7 +36,7 @@ HELP = ("Меню внизу чату:\n"
         "Щоб виправити текст, дайте відповідь (Reply) на чернетку своїм текстом.")
 # owner asked (22.11.2026) for a minimal menu; the other actions still work by plain words (статистика, хайп, чат…)
 MENU = [["План на сьогодні"]]
-MENU_VERSION = 8
+MENU_VERSION = 9
 CHAT_IDLE_MINUTES = 30
 MENU_ACTIONS = {"План на сьогодні": "menu_plan", "📅 План на сьогодні": "menu_plan", "📅 План": "menu_plan", "📊 Статистика": "menu_stats", "✍️ Пост зараз": "menu_post",
                 "🔥 Хайп": "menu_hype", "🎨 Картинка": "menu_draw", "💬 Коментарі": "menu_comments",
@@ -68,12 +67,12 @@ def menu_word(text: str) -> str | None:
     return WORD_ACTIONS.get(plain)
 
 
-COMMANDS = [("menu", "Меню"), ("status", "План на сьогодні"), ("clients", "Хто шукає дрова"),
-            ("stats", "Статистика Threads"), ("tysha", "Тиша на сьогодні"), ("help", "Допомога")]
+COMMANDS = [("menu", "Меню"), ("status", "План на сьогодні"), ("stats", "Статистика Threads"), ("tysha", "Тиша на сьогодні"), ("help", "Допомога")]
 AWAIT_MINUTES = 20
 LISTEN_SECONDS = 60  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
 MAX_GEN_PER_RUN = 2
 IMAGE_EVERY_DAYS = 3  # at most one automatic picture in 3 days
+BUYER_SEARCH = False  # owner paused it 22.11.2026: needs Meta App Review
 OAUTH_APP_ID = os.environ.get("THREADS_APP_ID", "1152144817371787")  # Koloda Threads Bot (public id)
 OAUTH_REDIRECT = "https://koloda.ua/auth/"
 OAUTH_SCOPES = ["threads_basic", "threads_content_publish", "threads_manage_replies", "threads_read_replies",
@@ -1538,13 +1537,15 @@ class Bot:
         self.say("Тиша до кінця дня: нічого не публікую і не надсилаю чернетки. Завтра продовжу сам.")
 
     def menu_buyers(self) -> None:
+        if not BUYER_SEARCH:
+            return self.say("Пошук клієнтів поки вимкнений: для нього потрібна перевірка Meta.")
         self.say("Шукаю в Threads, хто шукає дрова, це до хвилини…")
         self.find_buyers(force=True)
 
     def find_buyers(self, force: bool = False) -> None:
         """Daily at 11:00 Kyiv (or on /clients): fresh public posts of people looking for firewood.
         Only shows links to the owner; answering is always manual."""
-        if not self.th:
+        if not self.th or not BUYER_SEARCH:
             return
         if not force and (self.s.get("buyers_day") == self.today_key() or not (11 <= self.now.hour < 17)):
             return

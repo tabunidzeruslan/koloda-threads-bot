@@ -538,6 +538,7 @@ class LearnTests(unittest.TestCase):
         self.assertIsNone(chk(GOOD))
 
 
+@mock.patch("bot.main.BUYER_SEARCH", True)
 class BuyerSearchTests(unittest.TestCase):
     def test_shows_new_buyer_posts_once(self):
         b = make_bot(kyiv(11))
@@ -554,6 +555,7 @@ class BuyerSearchTests(unittest.TestCase):
         self.assertFalse(any("@olena" in str(t) for t in b.tg.sent[n:]))
 
 
+@mock.patch("bot.main.BUYER_SEARCH", True)
 class BuyerWordTests(unittest.TestCase):
     def test_word_runs_search_at_night(self):
         b = make_bot(kyiv(4))
