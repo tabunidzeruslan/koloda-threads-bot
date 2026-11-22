@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import os
@@ -1602,6 +1603,17 @@ def main(argv=None) -> int:
         return 0
     if s.get("relay_url") and tg_token:
         bot.relay = relay_mod.Relay(s["relay_url"], tg_token)
+        # keep the Worker code current without a separate deploy run (those get replaced in the queue)
+        script = (Path(__file__).resolve().parent.parent / "worker" / "worker.js").read_text(encoding="utf-8")
+        h = hashlib.sha256(script.encode()).hexdigest()[:16]
+        if s.get("worker_hash") != h and cf_acc and cf_tok and net.env("DISPATCH_TOKEN"):
+            try:
+                relay_mod.deploy(cf_acc, cf_tok, tg_token=tg_token, dispatch_token=net.env("DISPATCH_TOKEN"),
+                                 repo=os.environ.get("GITHUB_REPOSITORY", ""), script=script, log=log)
+                s["worker_hash"] = h
+                log("worker updated")
+            except Exception as e:
+                log("worker update failed:", e)
     try:
         if a.task == "tick":
             bot.tick()
