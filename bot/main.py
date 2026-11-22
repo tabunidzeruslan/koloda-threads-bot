@@ -525,7 +525,8 @@ class Bot:
             return self.say("Нет ключа Gemini, чат не работает.")
         hist = self.s.setdefault("chat_log", [])
         try:
-            res = chat.ask(self.gm, text=text, history=hist, rules=self.s.get("owner_rules", []),
+            expertise = (" | ".join(writer.knowledge_sample(n=25)) + "\n" + writer.kyiv_context(self.now.date()))
+            res = chat.ask(self.gm, text=text, history=hist, expertise=expertise, rules=self.s.get("owner_rules", []),
                            facts=self.s.get("owner_facts", []),
                            settings={"schedule_on": self.s["schedule_on"], "auto_images": self.s.get("auto_images", True)},
                            status=self.status_text(), images=images)

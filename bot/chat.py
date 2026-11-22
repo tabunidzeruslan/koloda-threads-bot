@@ -33,12 +33,13 @@ SYSTEM = """Ти помічник власника київської компа
 - Ніколи не проси і не приймай токени, паролі, ключі. Якщо власник їх надсилає, скажи, що ключі вводяться тільки в GitHub Secrets."""
 
 
-def ask(gm, *, text: str, history: list[dict], rules: list[str], facts: list[str], settings: dict,
+def ask(gm, *, text: str, expertise: str = "", history: list[dict], rules: list[str], facts: list[str], settings: dict,
         status: str, images: list | None = None) -> dict:
     ctx = (f"Поточні правила власника: {json.dumps(list(enumerate(rules)), ensure_ascii=False)}\n"
            f"Факти від власника: {json.dumps(list(enumerate(facts)), ensure_ascii=False)}\n"
            f"Налаштування: {json.dumps(settings, ensure_ascii=False)}\n"
            f"Стан бота: {status}\n"
+           f"Твої знання (факти з джерелами і київський контекст): {expertise}\n"
            f"Остання розмова: {json.dumps(history[-10:], ensure_ascii=False)}\n\n"
            f"Повідомлення власника: {text}")
     data = parse_json(gm.generate(ctx, system=SYSTEM, json_mode=True, temperature=0.4, images=images))
