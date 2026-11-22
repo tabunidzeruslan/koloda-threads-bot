@@ -1486,6 +1486,7 @@ class Bot:
         allowed = reactive or (important and self.in_talk_hours()) or (not important and not self.s.get("autopilot"))
         if auto and not getattr(self, "_reactive", 0):
             sl["msg_id"], sl["status"] = None, "approved"  # freedom: plan silently, the owner sees it in «План»
+            log("чернетка", sl["id"], hhmm(sl["at"]), "approved (свобода)", f"оцінка {d.get('score')}", "бібліотека" if d.get("lib") else "")
             return
         if img and self.tg and self.owner and allowed:
             photo = getattr(self, "_image_bytes", None) or img.get("file_id")
@@ -1506,6 +1507,7 @@ class Bot:
             return
         sl["msg_id"] = msg_id
         sl["status"] = "approved" if auto else "sent"
+        log("чернетка", sl["id"], hhmm(sl["at"]), sl["status"], f"оцінка {d.get('score')}", "бібліотека" if d.get("lib") else "")
 
     # ---------- publishing
     def publish_due(self) -> None:
@@ -1588,6 +1590,7 @@ class Bot:
             return
         sl["status"], sl["post"] = "published", res
         self.s["fail_streak"] = 0
+        log("опубліковано", sl["id"], hhmm(sl["at"]), res.get("permalink", ""))
         self.s["posts"].append({"text": text, "rubric": sl["draft"].get("rubric"), "id": res["id"],
                                 "permalink": res.get("permalink"), "at": self.now.isoformat(),
                                 "slot": sl.get("name") or sl.get("kind"), "hour": self.now.hour,
