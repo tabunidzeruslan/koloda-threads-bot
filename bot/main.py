@@ -481,8 +481,10 @@ class Bot:
             self.preview(max(1, min(n, 5)))
         elif cmd == "/selftest":
             self.say(self.selftest())
+        elif not text.startswith("/") and text.strip():
+            self.chat_turn(text)  # plain question: answer it like the chat does
         else:
-            self.say("Не зрозумів. Оберіть дію в меню внизу 👇", keyboard=self.menu_kb())
+            self.say("Не зрозумів. Оберіть дію в меню внизу.", keyboard=self.menu_kb())
 
     def on_edit(self, msg_id: int, text: str) -> None:
         for d in self.s["days"].values():
@@ -1632,7 +1634,8 @@ class Bot:
 
     # ---------- owner tools
     def status_text(self) -> str:
-        lines = [f"Щоденні чернетки: {'увімкнені' if self.s['schedule_on'] else 'вимкнені (🟢 Активувати)'}"]
+        lines = [f"Публікації: {'увімкнені' if self.s['schedule_on'] else 'вимкнені (кнопка Активувати)'}",
+                 f"Повна свобода: {'увімкнена, бот усе робить сам' if self.s.get('autopilot') else 'вимкнена (кнопка Повна свобода)'}"]
         if self.quiet():
             lines.append("Сьогодні тиша, завтра продовжу.")
         if self.s.get("paused_reason"):
