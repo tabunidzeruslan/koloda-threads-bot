@@ -184,6 +184,7 @@ class Bot:
         self.th = Threads(self.threads_token()) if threads_secret else None
         self.relay = None  # Cloudflare Worker queue, set in main() when deployed
         writer.set_owner(self.s.get("owner_rules", []), self.s.get("owner_facts", []))
+        writer.set_learned(self.s.get("learnings", []), self.s.get("best_examples", []), self.s.get("rubric_boost", {}))
 
     # ---------- helpers
     @property
@@ -1478,10 +1479,69 @@ class Bot:
         sl["status"], sl["post"] = "published", res
         self.s["fail_streak"] = 0
         self.s["posts"].append({"text": text, "rubric": sl["draft"].get("rubric"), "id": res["id"],
-                                "permalink": res.get("permalink"), "at": self.now.isoformat()})
-        self.s["posts"] = self.s["posts"][-60:]
+                                "permalink": res.get("permalink"), "at": self.now.isoformat(),
+                                "slot": sl.get("name") or sl.get("kind"), "hour": self.now.hour,
+                                "weekday": self.now.strftime("%a"), "image": bool(sl["draft"].get("image")),
+                                "tag": sl["draft"].get("tag", "")})
+        self.s["posts"] = self.s["posts"][-120:]
         if sl.get("msg_id") and self.tg and self.owner:
             self.tg.edit(self.owner, sl["msg_id"], f"🟢 Опубліковано {res.get('permalink', '')}\n\n{text}")
+
+    # ---------- self-learning
+    def collect_metrics(self) -> None:
+        """Once a day: views/likes/replies/reposts of our posts that are 1-14 days old."""
+        if not self.th or self.s.get("metrics_day") == self.today_key() or self.now.hour < 7:
+            return
+        self.s["metrics_day"] = self.today_key()
+        done = 0
+        for p in reversed(self.s.get("posts", [])):
+            if done >= 20 or not self.time_left():
+                break
+            age = since_minutes(p.get("at", ""), self.now) / 1440
+            if not p.get("id") or age < 1 or age > 14:
+                continue
+            try:
+                p["metrics"] = self.th.post_stats(p["id"])
+                p["measured"] = self.today_key()
+                done += 1
+            except Exception as e:
+                log("metrics", p.get("id"), net.scrub(str(e))[:120])
+        if done:
+            self.summary.append(f"metrics: {done}")
+
+    def learn(self, force: bool = False) -> None:
+        """Weekly: find what works in OUR account and feed it back into writing and rubric choice."""
+        last = self.s.get("learned_at", "")
+        if not self.gm or (not force and last and since_minutes(last, self.now) < 6 * 1440):
+            return
+        posts = [p for p in self.s.get("posts", []) if p.get("metrics")][-30:]
+        if len(posts) < 5:
+            return
+        try:
+            res = writer.analyze_posts(self.gm, posts)
+        except Exception as e:
+            log("learn", net.scrub(str(e))[:150])
+            return
+        if not res:
+            return
+        self.s["learned_at"] = self.now.isoformat()
+        learnings = [str(x)[:300] for x in res.get("learnings", []) if str(x).strip()][:8]
+        boost = {}
+        for k, v in (res.get("rubric_boost") or {}).items():
+            try:
+                boost[str(k)] = min(2.0, max(0.5, float(v)))
+            except (TypeError, ValueError):
+                pass
+        best = []
+        for i in res.get("best", [])[:3]:
+            if isinstance(i, int) and 0 <= i < len(posts):
+                best.append(posts[i]["text"])
+        if not best:
+            best = [p["text"] for p in sorted(posts, key=lambda p: writer.engagement_score(p["metrics"]), reverse=True)[:3]]
+        self.s["learnings"], self.s["rubric_boost"], self.s["best_examples"] = learnings, boost, best
+        writer.set_learned(learnings, best, boost)
+        if res.get("summary"):
+            self.say("Що я зрозумів за тиждень:\n" + str(res["summary"])[:600])
 
     # ---------- hype
     def make_hype(self, topic: str, *, url: str, images: list | None = None, source: str = "",
@@ -1676,6 +1736,8 @@ class Bot:
         self.check_comments()
         self.check_trends()
         self.publish_due()
+        self.collect_metrics()
+        self.learn()
         self.maybe_refresh_token()
         self.s["last_run"] = self.now.isoformat()
 

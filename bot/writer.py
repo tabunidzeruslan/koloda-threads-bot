@@ -52,6 +52,9 @@ RUSSIAN_WORDS = re.compile(r"\b(как|если|только|очень|сейч
                            r"всегда|никогда|потому|чтобы|ничего|говорят|дрова есть|купить|продам|недорого|привет|пожалуйста)\b")
 
 
+OUR_CLAIMS = re.compile(r"камерн|сушильн[аі] камер|\d+\s*%\s*вологост|вологіст\w*\s*(до|не більше|менше)?\s*\d+\s*%")
+
+
 def check(text: str, *, sell: bool, today: date, recent: list[str], examples: list[str]) -> str | None:
     """Return a reason to reject, or None if the text passes the hard filters."""
     t = text.strip()
@@ -71,6 +74,8 @@ def check(text: str, *, sell: bool, today: date, recent: list[str], examples: li
     if RUSSIAN_WORDS.search(t.lower()):
         return "російські слова (у постах тільки українська)"
     low = t.lower()
+    if OUR_CLAIMS.search(low):
+        return "обіцянка про наші дрова, якої немає (камерна сушка або відсоток вологості)"
     for w in BANNED:
         if w in low:
             return f"штамп «{w}»"
@@ -95,7 +100,8 @@ def check(text: str, *, sell: bool, today: date, recent: list[str], examples: li
 
 
 def pick_rubrics(rubrics: list[dict], today: date, last: list[str], n: int, rnd: random.Random) -> list[str]:
-    pool = [r for r in rubrics if not r["months"] or today.month in r["months"]]
+    pool = [dict(r, weight=r["weight"] * float(LEARNED["boost"].get(r["name"], 1.0)))
+            for r in rubrics if not r["months"] or today.month in r["months"]]
     if len(last) >= 1:
         pool = [r for r in pool if r["name"] != last[-1]] or pool
     chosen: list[str] = []
@@ -113,7 +119,7 @@ def pick_rubrics(rubrics: list[dict], today: date, last: list[str], n: int, rnd:
 
 SYSTEM = """ГОЛОВНЕ: кожен пост або реально корисний (конкретна порада, яку людина застосує сьогодні), або реально смішний,
 а найкраще і те, і інше. Пластмасові рекламні фрази («стабільне тепло», «не підводить», «затишок») = провал.
-Мета акаунта: продавати дрова і отримувати заявки, тому люди мають запамʼятати, що Koloda = сухі дрова, чесний обʼєм,
+Мета акаунта: продавати дрова і отримувати заявки, тому люди мають запамʼятати, що Koloda = дрова природної сушки, чесний обʼєм,
 доставка по Києву і області сьогодні.
 Ти пишеш пости для Threads від імені київського продавця дров Koloda. Пиши ТІЛЬКИ українською (російська мова в постах і відповідях заборонена повністю, навіть окремі слова і цитати), як жива людина з дров'яного бізнесу, а не як маркетолог чи ШІ.
 Правила:
@@ -126,6 +132,7 @@ SYSTEM = """ГОЛОВНЕ: кожен пост або реально корис
 - Без хештегів, списків, мату, канцеляриту і штампів ШІ.
 - Часто питай людей: думка + питання, вибір А/Б, «а у вас як?». Виводь на емоцію (впізнавання, ностальгія, легке
   обурення, азарт суперечки, гордість), щоб хотілося відповісти. Не «напишіть у коментарях» (це приманка), а справжнє питання.
+- Наші дрова ПРИРОДНОЇ сушки. Заборонено писати, що вони «сухі», «ідеально сухі», «камерної сушки» чи називати відсоток вологості. Кажи «природної сушки» і що підкажемо по породі телефоном. Ціни в постах і відповідях не називаємо ніколи, лише в дірект або телефоном.
 - Дрова головний продукт. Пелети, брикети, кора другорядні, згадуй рідко. Оптом продаємо ще кругляк (його немає на сайті).
 - Гумор гострий, сучасний український, як у живому Threads: самоіронія, впізнаваний побут, несподіваний поворот, дотепна
   деталь. НЕ плоский «англійський» гумор: каламбури заради каламбуру, «тато-жарти», ввічливі дотепи, які ніхто не перешле.
@@ -142,6 +149,43 @@ OWNER: dict = {"rules": [], "facts": []}  # set by the bot from what the owner s
 
 def set_owner(rules_: list[str], facts_: list[str]) -> None:
     OWNER["rules"], OWNER["facts"] = list(rules_ or []), list(facts_ or [])
+
+
+LEARNED: dict = {"learnings": [], "examples": [], "boost": {}}
+
+
+def set_learned(learnings: list[str], examples: list[str], boost: dict) -> None:
+    LEARNED["learnings"], LEARNED["examples"], LEARNED["boost"] = list(learnings or []), list(examples or []), dict(boost or {})
+
+
+ANALYST = """Ти аналітик Threads-акаунта київського продавця дров Koloda. Методика (адаптовано з blacktwist/social-media-skills,
+performance-analyzer і content-pattern-analyzer, MIT): порівнюй не сирі цифри, а залученість відносно переглядів;
+відповіді і репости важать більше за лайки. Знайди найкращі і найгірші пости і поясни ЧОМУ: тема, рубрика, гачок у першому рядку,
+формат (питання, суперечка, порада, гумор, продаж, тренд), довжина, час, картинка, тег. Шукай повторювані закономірності,
+а не випадковості; при малій кількості постів формулюй обережно («схоже, що…»).
+Поверни конкретні правила для автора на наступний тиждень (до 8), кожне спирається на цифри з даних.
+Також оціни рубрики: множник 0.5-2.0 (більше 1 = писати частіше), тільки для рубрик, що є в даних.
+Відповідь тільки JSON: {"learnings": ["правило з поясненням"], "rubric_boost": {"рубрика": 1.3}, "best": [індекси найкращих постів, до 3],
+"summary": "2-3 речення українською: що працює, що ні"}"""
+
+
+def analyze_posts(gm: Gemini, posts: list[dict]) -> dict:
+    rows = []
+    for i, p in enumerate(posts):
+        m = p.get("metrics") or {}
+        rows.append({"i": i, "text": (p.get("text") or "")[:300], "rubric": p.get("rubric"), "slot": p.get("slot"),
+                     "hour": p.get("hour"), "weekday": p.get("weekday"), "image": p.get("image"), "tag": p.get("tag"),
+                     "question": "?" in (p.get("text") or ""), "len": len(p.get("text") or ""), **m,
+                     "score": engagement_score(m)})
+    data = parse_json(gm.generate("Пости з метриками:\n" + json.dumps(rows, ensure_ascii=False), system=ANALYST,
+                                  json_mode=True, temperature=0.2))
+    return data if isinstance(data, dict) else {}
+
+
+def engagement_score(m: dict) -> float:
+    """Replies and reposts matter most for Threads recommendations; per 100 views so big and small posts compare."""
+    pts = 3 * (m.get("replies") or 0) + 4 * ((m.get("reposts") or 0) + (m.get("quotes") or 0)) + (m.get("likes") or 0)
+    return round(100 * pts / max(m.get("views") or 0, 30), 2)
 
 
 def knowledge_sample(rnd: random.Random | None = None, n: int = 12) -> list[str]:
@@ -202,6 +246,12 @@ def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[st
         lines.append("Емоції, на які люди відповідають: " + json.dumps(pt["emotions_that_work"], ensure_ascii=False))
     except (OSError, ValueError, KeyError):
         pass
+    if LEARNED["learnings"]:
+        lines.append("ЩО ПРАЦЮЄ САМЕ В НАШОМУ АКАУНТІ (висновки з нашої статистики, мають пріоритет над загальними порадами): "
+                     + json.dumps(LEARNED["learnings"], ensure_ascii=False))
+    if LEARNED["examples"]:
+        lines.append("Наші пости, що зібрали найбільше відповідей (бери механіку, не копіюй текст): "
+                     + json.dumps(LEARNED["examples"][:3], ensure_ascii=False))
     kc = kyiv_context(today)
     if kc:
         lines.append(kc)
@@ -258,7 +308,7 @@ def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[st
     if sell:
         lines.append("Це ПРОДАЮЧИЙ пост: 1-3 речення до 260 символів, м'яко, з контактом "
                      f"({biz['contacts']['phone']} або «пишіть у дірект»). Приклад: {style['sell_example']}")
-        lines.append("Напиши 4 різні варіанти продаючого поста з різними кутами (швидкість, чесний об'єм, сухі дрова, зручність). Приблизно раз на тиждень один з варіантів може бути про кругляк оптом (для тих, хто колить сам, пилорам, великих господарств): деталі й обсяги телефоном або в дірект, цін не називати.")
+        lines.append("Напиши 4 різні варіанти продаючого поста з різними кутами (швидкість, чесний об'єм, дрова природної сушки, зручність). Приблизно раз на тиждень один з варіантів може бути про кругляк оптом (для тих, хто колить сам, пилорам, великих господарств): деталі й обсяги телефоном або в дірект, цін не називати.")
     elif not topic:
         lines.append("Напиши 4 варіанти, по одному на кожну рубрику: " + json.dumps(rubrics, ensure_ascii=False))
     lines.append('Відповідь тільки JSON: {"variants": [{"rubric": "...", "text": "...", "tag": "тег теми"}]}')
@@ -525,7 +575,7 @@ def factcheck(gm: Gemini, text: str, topic: str = "") -> tuple[str, str, str | N
     """Returns (status, text, note). status: ok | fixed | bad | unchecked."""
     current = text
     given = (f"Інфопривід від власника акаунта (вважай правдою, не перевіряй): {topic[:400]}\n") if topic else ""
-    given += ("Факти компанії від власника (правда, не перевіряй і не прибирай): у Koloda 1 куб навалом = 0,75 складометра; "
+    given += ("Факти компанії від власника (правда, не перевіряй і не прибирай): у Koloda 1 куб навалом = 0,75 складометра; дрова природної сушки (не камерної); цін у постах не називаємо; "
               "продаємо кругляк оптом; доставка по Києву та області в день замовлення. "
               + ("; ".join(OWNER["facts"][:10]) if OWNER["facts"] else "") + "\n")
     search_ok = True

@@ -497,3 +497,42 @@ class ChatAndRelayTests(unittest.TestCase):
         self.assertEqual(b.handle_updates(), 1)
         r.ack.assert_called_with([7])
         self.assertEqual(b.handle_relay(), 1)  # same update again (lost ack) is not handled twice
+
+
+class LearnTests(unittest.TestCase):
+    def setUp(self):
+        writer.set_learned([], [], {})
+
+    def tearDown(self):
+        writer.set_learned([], [], {})
+
+    def test_metrics_and_weekly_learning(self):
+        b = make_bot(kyiv(11))
+        b.th.post_stats = mock.Mock(return_value={"views": 200, "likes": 5, "replies": 4, "reposts": 1, "quotes": 0})
+        b.s["posts"] = [{"id": str(i), "text": f"пост {i}?", "rubric": "Питання", "at": kyiv(10, d=18).isoformat()}
+                        for i in range(6)] + [{"id": "new", "text": "свіжий", "at": kyiv(9).isoformat()}]
+        b.collect_metrics()
+        self.assertEqual(b.th.post_stats.call_count, 6)  # today's post is too fresh to measure
+        b.collect_metrics()
+        self.assertEqual(b.th.post_stats.call_count, 6)  # once a day
+        b.gm.generate = mock.Mock(return_value='{"learnings": ["питання в першому рядку дають відповіді"], '
+                                               '"rubric_boost": {"Питання": 5}, "best": [1], "summary": "Питання працюють."}')
+        b.learn()
+        self.assertEqual(b.s["rubric_boost"], {"Питання": 2.0})
+        self.assertEqual(b.s["best_examples"], ["пост 1?"])
+        self.assertEqual(writer.LEARNED["learnings"], ["питання в першому рядку дають відповіді"])
+        calls = b.gm.generate.call_count
+        b.learn()
+        self.assertEqual(b.gm.generate.call_count, calls)  # weekly, not every run
+
+    def test_no_learning_with_few_posts(self):
+        b = make_bot(kyiv(11))
+        b.s["posts"] = [{"id": "1", "text": "a", "metrics": {"views": 10}}]
+        b.gm.generate = mock.Mock()
+        b.learn()
+        b.gm.generate.assert_not_called()
+
+    def test_our_claims_rejected(self):
+        chk = lambda t: writer.check(t, sell=False, today=date(2026, 11, 22), recent=[], examples=[])
+        self.assertIn("камерна", chk("У нас дрова камерної сушки, а у вас які? Пишіть, порадимо по породі"))
+        self.assertIsNone(chk(GOOD))
