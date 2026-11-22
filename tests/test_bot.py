@@ -680,3 +680,9 @@ class OwnerFeedbackTests(unittest.TestCase):
         b.s["days"][b.today_key()] = {"slots": [sl]}
         self.assertEqual(b.resume_doubtful(), 1)
         self.assertEqual((sl["status"], sl["draft"], sl["owner_only"]), ("new", None, False))
+
+    def test_region_and_curfew(self):
+        chk = lambda t: writer.check(t, sell=False, today=date(2026, 11, 22), recent=[], examples=[])
+        self.assertIn("100 км", chk("У Житомирі вже морозно, а в Києві ще тримається. Ви вже топите на повну чи чекаєте?"))
+        self.assertIn("комендантська", chk("Хто виїжджає по дрова о 5 ранку, а хто чекає вихідних? Розкажіть, як у вас"))
+        self.assertIsNone(chk("У Броварах і Ірпені вже морозно, а в Києві ще тримається. Ви вже топите на повну?"))

@@ -73,7 +73,7 @@ COMMANDS = [("menu", "Меню"), ("status", "План на сьогодні"), 
 AWAIT_MINUTES = 20
 LISTEN_SECONDS = 60  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
 MAX_GEN_PER_RUN = 2
-RESUME_V = 2  # bump to hand held-back posts back to the bot after a rules change
+RESUME_V = 3  # bump to hand held-back posts back to the bot after a rules change
 GOAL_FOLLOWERS = 10_000  # owner 22.11.2026: the agent's own target, never mentioned in posts
 IMAGE_EVERY_DAYS = 14  # owner 22.11.2026: pictures almost never, at most one automatic picture in 2 weeks
 OAUTH_APP_ID = os.environ.get("THREADS_APP_ID", "1152144817371787")  # Koloda Threads Bot (public id)
@@ -1617,6 +1617,23 @@ class Bot:
                 n += 1
         return n
 
+    def redo_post_now(self) -> None:
+        """Owner 22.11.2026: the 13:43 post was nonsense and he deletes it in Threads; post a new one now instead."""
+        if self.today_key() != "2026-11-22":
+            return
+        bad = [x for x in self.slots() if x["status"] == "published" and x["at"] == 823]
+        if not bad:
+            return
+        bad[0]["status"] = "deleted"
+        pid = (bad[0].get("post") or {}).get("id")
+        self.s["posts"] = [p for p in self.s["posts"] if p.get("id") != pid]
+        nxt = sorted([x for x in self.slots() if x["status"] in ("approved", "new") and x["kind"] != "sell"],
+                     key=lambda x: x["at"])
+        if nxt:
+            nxt[0].update(status="new", draft=None, tries=0, at=minutes_of(self.now), lib_judged=None)
+            if nxt[0].get("draft") is None and nxt[0].get("lib"):
+                nxt[0].pop("lib")
+
     def menu_restart(self) -> None:
         """Owner's restart button: drop half-finished modes, re-check today's plan, show the state."""
         for k in ("chat_mode", "chat_focus", "chat_pending", "await"):
@@ -1894,6 +1911,7 @@ class Bot:
         if self.s.get("resume_v") != RESUME_V:  # one-time restart after a rules update (owner 22.11.2026)
             self.s["resume_v"] = RESUME_V
             self.resume_doubtful()
+            self.redo_post_now()
         self.ensure_menu()
         self.flush_outbox()
         self.upgrade_plan()
