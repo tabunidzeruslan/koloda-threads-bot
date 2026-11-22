@@ -118,6 +118,24 @@ SYSTEM = """Ти пишеш пости для Threads від імені київ
 - Не представляйся («Привіт, я…»)."""
 
 
+OWNER: dict = {"rules": [], "facts": []}  # set by the bot from what the owner said in the chat
+
+
+def set_owner(rules_: list[str], facts_: list[str]) -> None:
+    OWNER["rules"], OWNER["facts"] = list(rules_ or []), list(facts_ or [])
+
+
+def knowledge_sample(rnd: random.Random | None = None, n: int = 12) -> list[str]:
+    """A rotating handful of sourced facts from data/knowledge.json, so posts get fresh true details."""
+    try:
+        kb = load("knowledge.json")
+    except (OSError, ValueError):
+        return []
+    facts = [f["text"] for sec in kb.get("sections", []) for f in sec.get("facts", []) if f.get("text")]
+    rnd = rnd or random.Random()
+    return rnd.sample(facts, min(n, len(facts)))
+
+
 def rules() -> dict:
     try:
         return load("writing_rules.json")
@@ -135,10 +153,14 @@ def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[st
         f"Формат для цього разу (хоча б 2 з 4 варіантів): {fmt}",
         f"Сьогодні {today.day} {MONTHS_UK[today.month - 1]} {today.year}, сезон: {season(today)}. Не пиши про інший сезон.",
         "Факти про бізнес (єдине джерело): " + json.dumps(biz, ensure_ascii=False),
-        "Перевірені факти ніші: " + json.dumps(facts["facts"], ensure_ascii=False),
+        "Перевірені факти ніші: " + json.dumps(facts["facts"] + knowledge_sample(), ensure_ascii=False),
         "Приклади тону (не копіюй, лише стиль): " + json.dumps(style["examples"], ensure_ascii=False),
         "Недавні пости (не повторюй теми і жарти): " + json.dumps(recent[-12:], ensure_ascii=False),
     ]
+    if OWNER["facts"]:
+        lines.append("Факти від власника (правда, можна використовувати): " + json.dumps(OWNER["facts"], ensure_ascii=False))
+    if OWNER["rules"]:
+        lines.append("ПРАВИЛА ВЛАСНИКА (найважливіші, виконуй завжди): " + json.dumps(OWNER["rules"], ensure_ascii=False))
     r = rules()
     if r:
         lines.append("Правила Threads-поста: " + json.dumps(r.get("threads_post", []), ensure_ascii=False))
@@ -183,7 +205,7 @@ EDITOR = """Ти суворий редактор постів у Threads. Оці
 
 
 def score(gm: Gemini, texts: list[str], today: date, recent: list[str]) -> list[tuple[int, str]]:
-    checks = rules().get("editor_checks", [])
+    checks = rules().get("editor_checks", []) + [f"Чи виконано правило власника: {x}?" for x in OWNER["rules"]]
     logic = ("Перевірка логіки (якщо хоч одна відповідь погана, оцінка не вище 4): " +
              json.dumps(checks, ensure_ascii=False) + "\n") if checks else ""
     prompt = (logic +f"Дата: {today.isoformat()}, сезон: {season(today)}.\nНедавні пости: {json.dumps(recent[-8:], ensure_ascii=False)}\n"

@@ -9,7 +9,8 @@ import sys
 import time
 from datetime import date, datetime
 
-from . import crypto, net, state as st, trends, writer
+from . import chat, crypto, net, state as st, trends, writer
+from .cfai import CFText
 from .images import Images
 from .gemini import Gemini
 from .schedule import (LAST_PUBLISH_MIN, SPACING_MIN, hhmm, make_slots, minutes_of, now_kyiv, since_minutes)
@@ -26,6 +27,7 @@ HELP = ("Всё есть в меню кнопками внизу чата:\n"
         "🔥 Хайп: тренды Украины сейчас или своя тема (можно скриншот)\n"
         "🎨 Картинка: Иванович рисует что угодно, ничего не публикуется\n"
         "💬 Комментарии: свежие ответы под нашими постами\n"
+        "🧠 Чат с ботом: пишите обычными словами, бот отвечает и меняет свои правила (после вашего ✅)\n"
         "⚙️ Настройки: тишина на день, авто-картинки, пробные посты, проверка\n\n"
         "Команды тоже работают:\n/status - что запланировано\n/on - включить ежедневные черновики (3 в день)\n"
         "/off - выключить\n/tysha - тишина на сегодня (день траура или тяжёлых обстрелов)\n/preview 3 - показать N пробных постов (ничего не публикуется)\n"
@@ -34,11 +36,12 @@ HELP = ("Всё есть в меню кнопками внизу чата:\n"
         "Чтобы поправить текст, ответьте (Reply) на черновик своим текстом.\n"
         "Бот просыпается раз в 30 минут, поэтому ответ приходит с задержкой.")
 MENU = [["📅 План", "📊 Статистика"], ["✍️ Пост сейчас", "🔥 Хайп"],
-        ["🎨 Картинка", "💬 Комментарии"], ["⚙️ Настройки", "❓ Помощь"]]
-MENU_VERSION = 1
+        ["🎨 Картинка", "💬 Комментарии"], ["🧠 Чат с ботом", "⚙️ Настройки"], ["❓ Помощь"]]
+MENU_VERSION = 2
+CHAT_IDLE_MINUTES = 30
 MENU_ACTIONS = {"📅 План": "menu_plan", "📊 Статистика": "menu_stats", "✍️ Пост сейчас": "menu_post",
                 "🔥 Хайп": "menu_hype", "🎨 Картинка": "menu_draw", "💬 Комментарии": "menu_comments",
-                "⚙️ Настройки": "menu_settings", "❓ Помощь": "menu_help"}
+                "⚙️ Настройки": "menu_settings", "❓ Помощь": "menu_help", "🧠 Чат с ботом": "menu_chat"}
 COMMANDS = [("menu", "Показать меню"), ("status", "План на сегодня"), ("stats", "Статистика Threads"),
             ("post", "Черновик прямо сейчас"), ("hype", "Пост на горячую тему"), ("draw", "Картинка с Ивановичем"),
             ("comments", "Новые комментарии"), ("on", "Включить расписание"), ("off", "Выключить расписание"),
@@ -118,6 +121,7 @@ class Bot:
         if chat_id_env.strip().lstrip("-").isdigit():
             self.s["owner_chat_id"] = int(chat_id_env)
         self.th = Threads(self.threads_token()) if threads_secret else None
+        writer.set_owner(self.s.get("owner_rules", []), self.s.get("owner_facts", []))
 
     # ---------- helpers
     @property
@@ -248,6 +252,12 @@ class Bot:
                 if aw["what"] == "hype" and topic:
                     self.say("🔥 Пишу пост на эту тему, около минуты…")
                     return self.make_hype(topic, url="", images=[img] if img else None, source="ваш хайп")
+        cm = self.s.get("chat_mode")
+        if cm and not reply_to and not text.startswith("/"):
+            if since_minutes(cm, now_kyiv()) <= CHAT_IDLE_MINUTES:
+                img = self.tg.download_photo(m["photo"][-1]["file_id"]) if m.get("photo") else None
+                return self.chat_turn(text or "(скриншот)", [img] if img else None)
+            self.s.pop("chat_mode", None)
         if reply_to and m.get("photo") and not text.startswith("/"):
             return self.on_owner_photo(reply_to, m["photo"][-1]["file_id"])
         if reply_to and not text.startswith("/"):
@@ -395,7 +405,7 @@ class Bot:
         self.say("⚙️ Настройки", buttons=[
             [("⏸ Выключить расписание", "m|off") if on else ("▶️ Включить расписание", "m|on")],
             [("🤫 Тишина сегодня", "m|quiet"), ("🔔 Отменить тишину", "m|unquiet")],
-            [(f"🖼 Авто-картинки: {'вкл' if auto else 'выкл'}", "m|autoimg")],
+            [(f"🖼 Авто-картинки: {'вкл' if auto else 'выкл'}", "m|autoimg"), ("📋 Мои правила", "m|rules")],
             [("👀 3 пробных поста", "m|preview"), ("🩺 Проверка", "m|selftest")]])
 
     def menu_help(self) -> None:
@@ -433,6 +443,138 @@ class Bot:
             self.say("Напишите тему одним сообщением или пришлите скриншот из ленты (можно с подписью).")
         elif what == "selftest":
             self.say(self.selftest())
+        elif what == "chatoff":
+            self.s.pop("chat_mode", None)
+            self.say("Вышел из чата. Меню внизу 👇", keyboard=MENU)
+        elif what == "rules":
+            self.menu_rules()
+        elif what.startswith("delrule|") or what.startswith("delfact|"):
+            kind, _, i = what.partition("|")
+            key = "owner_rules" if kind == "delrule" else "owner_facts"
+            items = self.s.get(key, [])
+            if i.isdigit() and int(i) < len(items):
+                gone = items.pop(int(i))
+                writer.set_owner(self.s.get("owner_rules", []), self.s.get("owner_facts", []))
+                self.say(f"🗑 Убрал: {gone}")
+                self.menu_rules()
+        elif what.startswith("apply|") or what.startswith("reject|"):
+            act, _, pid = what.partition("|")
+            pend = self.s.get("chat_pending") or {}
+            if str(pend.get("id")) != pid:
+                return self.say("Это предложение уже неактуально.")
+            self.s.pop("chat_pending", None)
+            if act == "reject":
+                return self.say("Хорошо, ничего не меняю.")
+            self.apply_changes(pend["changes"])
+
+    # ---------- owner chat
+    def menu_chat(self) -> None:
+        self.s["chat_mode"] = now_kyiv().isoformat()
+        self.say("🧠 Чат с ботом. Пишите обычными словами, можно скриншот. Например:\n"
+                 "• «не пиши про сосну, мы её почти не продаём»\n"
+                 "• «у нас теперь доставка в Ирпень бесплатная»\n"
+                 "• «сделай пост про то, как Иванович топит камин»\n"
+                 "• «почему вчерашний пост так мало набрал?»\n\n"
+                 "Изменения применяю только после вашей кнопки ✅. Чат сам закроется через 30 минут тишины.",
+                 buttons=[[("📋 Мои правила", "m|rules"), ("🚪 Выйти из чата", "m|chatoff")]])
+
+    def menu_rules(self) -> None:
+        rules_, facts_ = self.s.get("owner_rules", []), self.s.get("owner_facts", [])
+        if not rules_ and not facts_:
+            return self.say("📋 Ваших правил пока нет. Скажите их в 🧠 Чате с ботом.")
+        lines = ["📋 Ваши правила для постов:"] + [f"{i + 1}. {r}" for i, r in enumerate(rules_)]
+        if facts_:
+            lines += ["", "Факты о бизнесе:"] + [f"{i + 1}. {f}" for i, f in enumerate(facts_)]
+        btns = [[(f"🗑 Правило {i + 1}", f"m|delrule|{i}")] for i in range(min(len(rules_), 8))]
+        btns += [[(f"🗑 Факт {i + 1}", f"m|delfact|{i}")] for i in range(min(len(facts_), 4))]
+        self.say("\n".join(lines), buttons=btns or None)
+
+    def chat_turn(self, text: str, images: list | None = None) -> None:
+        self.s["chat_mode"] = now_kyiv().isoformat()
+        if not self.gm:
+            return self.say("Нет ключа Gemini, чат не работает.")
+        hist = self.s.setdefault("chat_log", [])
+        try:
+            res = chat.ask(self.gm, text=text, history=hist, rules=self.s.get("owner_rules", []),
+                           facts=self.s.get("owner_facts", []),
+                           settings={"schedule_on": self.s["schedule_on"], "auto_images": self.s.get("auto_images", True)},
+                           status=self.status_text(), images=images)
+        except Exception as e:
+            return self.say(f"Не смог ответить: {net.scrub(str(e))[:200]}")
+        hist += [{"owner": text[:500]}, {"bot": res["reply"][:500]}]
+        del hist[:-20]
+        rules_, facts_ = self.s.get("owner_rules", []), self.s.get("owner_facts", [])
+        described = [(c, chat.describe(c, rules_, facts_)) for c in res["changes"]]
+        described = [(c, d) for c, d in described if d]
+        if not described:
+            return self.say(res["reply"] or "…")
+        if all(c["type"] in ("draft", "draw") for c, _ in described):
+            self.say(res["reply"] or "Делаю.")
+            return self.apply_changes([c for c, _ in described])
+        pid = int(time.time()) % 100000
+        self.s["chat_pending"] = {"id": pid, "changes": [c for c, _ in described]}
+        self.say((res["reply"] + "\n\n" if res["reply"] else "") + "Предлагаю:\n" + "\n".join(d for _, d in described),
+                 buttons=[[("✅ Применить", f"m|apply|{pid}"), ("❌ Не надо", f"m|reject|{pid}")]])
+
+    def apply_changes(self, changes: list[dict]) -> None:
+        rules_ = self.s.setdefault("owner_rules", [])
+        facts_ = self.s.setdefault("owner_facts", [])
+        done, later = [], []
+        # removals first, highest index first, so indexes stay valid
+        for c in sorted([c for c in changes if c["type"] in ("rule_remove", "fact_remove")],
+                        key=lambda c: -int(c.get("index", -1))):
+            items = rules_ if c["type"] == "rule_remove" else facts_
+            i = int(c.get("index", -1))
+            if 0 <= i < len(items):
+                done.append(f"убрал «{items.pop(i)}»")
+        for c in changes:
+            t = c["type"]
+            if t == "rule_add" and c.get("text"):
+                rules_.append(str(c["text"])[:300])
+                done.append("правило добавлено")
+            elif t == "fact_add" and c.get("text"):
+                facts_.append(str(c["text"])[:300])
+                done.append("факт добавлен")
+            elif t == "setting" and c.get("key") in ("schedule_on", "auto_images"):
+                self.s[c["key"]] = bool(c.get("value"))
+                done.append(f"{c['key']} = {bool(c.get('value'))}")
+            elif t in ("draft", "draw", "dev"):
+                later.append(c)
+        del rules_[30:]
+        del facts_[30:]
+        writer.set_owner(rules_, facts_)
+        if done:
+            self.say("✅ Готово: " + "; ".join(done))
+        self.persist()
+        for c in later:
+            if c["type"] == "draw":
+                self.draw(str(c.get("topic") or ""))
+            elif c["type"] == "draft":
+                if c.get("kind") == "hype" and c.get("topic"):
+                    self.make_hype(str(c["topic"]), url="", source="ваш чат")
+                else:
+                    self.make_now(sell=c.get("kind") == "sell")
+            elif c["type"] == "dev":
+                self.dev_request(str(c.get("text") or ""))
+
+    def dev_request(self, text: str) -> None:
+        """Things the bot cannot change itself go to GitHub Issues: the developer (Claude) picks them up."""
+        if not text:
+            return
+        repo, token = (self.images.media_repo, self.images.media_token) if self.images else ("", "")
+        if not (repo and token):
+            self.s.setdefault("dev_requests", []).append(text[:1000])
+            return self.say("🛠 Записал задачу для разработчика: " + text[:300])
+        try:
+            res = net.request("POST", f"https://api.github.com/repos/{repo}/issues",
+                              json_body={"title": "Из чата с ботом: " + text[:80],
+                                         "body": text + "\n\n_Создано ботом по просьбе владельца в Telegram-чате._"},
+                              headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"})
+            self.say(f"🛠 Это нужно менять в коде, создал задачу разработчику: {res.get('html_url', '')}\n"
+                     "Скажите Claude в проекте «сделай задачи из GitHub», и он их выполнит.")
+        except Exception as e:
+            self.s.setdefault("dev_requests", []).append(text[:1000])
+            self.say(f"🛠 Записал задачу для разработчика (GitHub не принял: {net.scrub(str(e))[:100]}).")
 
     def make_now(self, sell: bool) -> bool:
         if not self.gm:
@@ -617,7 +759,7 @@ class Bot:
             return None
         finally:
             if self.gm and self.gm.model:
-                self.s["gemini_model"] = self.gm.model
+                self.s["gemini_model"] = self.gm.model if not str(self.gm.model).startswith("cloudflare") else self.s.get("gemini_model")
         return post
 
     def should_illustrate(self, sl: dict) -> bool:
@@ -871,7 +1013,7 @@ class Bot:
                 chk("Gemini, текст", lambda: (self.gm.generate("Відповідай одним словом: так", temperature=0) and self.gm.model))
                 chk("Gemini, поиск Google", lambda: (self.gm.generate("Яка столиця України? Одне слово.", search=True, temperature=0)[:30]))
                 if self.gm.model:
-                    self.s["gemini_model"] = self.gm.model
+                    self.s["gemini_model"] = self.gm.model if not str(self.gm.model).startswith("cloudflare") else self.s.get("gemini_model")
         else:
             out.append("❌ Нет секрета GEMINI_API_KEY")
         out += secret_shapes()
@@ -937,7 +1079,8 @@ def main(argv=None) -> int:
     gm_key = net.env("GEMINI_API_KEY")
     enc_key = net.env("STATE_KEY") or tg_token or "no-key"
     s = st.load(a.state)
-    gm = Gemini(gm_key, s.get("gemini_model")) if gm_key else None
+    cf_text = CFText(net.env("CF_ACCOUNT_ID"), clean_token(net.env("CF_API_TOKEN")))
+    gm = Gemini(gm_key, s.get("gemini_model"), fallback=cf_text or None) if gm_key else None
     images = Images(cf_account=net.env("CF_ACCOUNT_ID"), cf_token=clean_token(net.env("CF_API_TOKEN")),
                     gemini=gm if net.env("GEMINI_IMAGES") == "1" else None,
                     media_repo=net.env("MEDIA_REPO") or net.env("GITHUB_REPOSITORY"), media_token=net.env("GH_MEDIA_TOKEN"))

@@ -24,8 +24,10 @@ def rank_models(names: list[str]) -> list[str]:
 
 
 class Gemini:
-    def __init__(self, key: str, preferred: str | None = None):
+    def __init__(self, key: str, preferred: str | None = None, fallback=None):
         self.key = key
+        self.fallback = fallback  # CFText: used when every Gemini model is out of free quota
+        self.dead: set[str] = set()  # models that hit their daily quota during this run
         net.register_secret(key)
         self.preferred = preferred
         self.model: str | None = None
@@ -95,9 +97,9 @@ class Gemini:
         if search:
             body["tools"] = [{"google_search": {}}]
         last: Exception | None = None
-        models = self.list_models()[:6 if search else 4]
-        if not models:
-            raise RuntimeError("Gemini: нет доступных моделей flash для этого ключа")
+        models = [m for m in self.list_models() if m not in self.dead][:8]
+        if not models and not self.fallback:
+            raise RuntimeError("Gemini: нет доступных моделей flash для этого ключа (или кончилась дневная квота)")
         for model in models:
             for attempt in range(2):
                 try:
@@ -113,6 +115,8 @@ class Gemini:
                 except net.NetError as e:
                     last = e
                     quota = "quota" in str(e.body).lower()
+                    if e.status == 429 and quota:
+                        self.dead.add(model)
                     if e.status == 429 and attempt == 0 and not quota:
                         time.sleep(15)
                         continue
@@ -120,6 +124,14 @@ class Gemini:
                 except (KeyError, IndexError) as e:
                     last = RuntimeError(f"неожиданный ответ: {e}")
                     break
+        if self.fallback and not images:
+            try:
+                text = self.fallback.chat(prompt + ("\n\nВідповідь тільки JSON." if json_mode else ""),
+                                          system=system, temperature=temperature)
+                self.model = f"cloudflare:{self.fallback.model}"
+                return text
+            except Exception as e:
+                last = e
         raise RuntimeError(f"Gemini не ответил: {last}")
 
 
