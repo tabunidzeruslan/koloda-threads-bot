@@ -644,11 +644,11 @@ class Bot:
         out += secret_shapes()
         if self.images:
             def img_test():
-                prompt = writer.render_prompt("The log character stands next to a neat stacked cubic meter of firewood "
-                                              "and measures it with a tiny orange tape measure.")
+                prompt = writer.render_prompt("The man stands next to a neat stacked cubic meter of firewood "
+                                              "and proudly measures it with an orange tape measure.")
                 res = self.images.generate(prompt, log=log)
                 if self.tg and self.owner:
-                    self.tg.send_photo(self.owner, res["bytes"], f"Пробная картинка: Колодько ({res['provider']})")
+                    self.tg.send_photo(self.owner, res["bytes"], f"Пробная картинка: Иванович ({res['provider']})")
                 return f"{res['provider']}, {len(res['bytes']) // 1024} КБ"
             out.append(f"ℹ️ Генераторы картинок: {', '.join(self.images.providers())}")
             chk("Картинка", img_test)

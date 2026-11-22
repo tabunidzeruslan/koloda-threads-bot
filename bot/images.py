@@ -9,8 +9,8 @@ from urllib.request import Request, urlopen
 from . import media, net
 
 
-SAFE_PROMPT = ("A small wooden firewood log cartoon character with white dot eyes and stick arms stands next to a neat "
-               "stack of firewood. Minimalist black ink doodle on a plain white background, small orange accents.")
+SAFE_PROMPT = ("A stocky smiling man with a grey mustache in a black puffer vest stands next to a neat "
+               "stack of firewood. Stylized 3D animated character render, warm light, plain beige background.")
 
 
 class Images:

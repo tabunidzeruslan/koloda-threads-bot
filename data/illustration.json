@@ -1,10 +1,10 @@
 {
-  "note": "Стиль ілюстрацій: адаптація стилю 'Ian Xiaohei Illustrations' (MIT, автор Ian, github.com/helloianneo/ian-xiaohei-illustrations) з власним героєм Колодько.",
+  "note": "Герой ілюстрацій: Іванович, бренд-персонаж Koloda (референс від Руслана, 2026-11-22). Попередній варіант (полено Колодько в стилі Ian Xiaohei) замінено.",
   "every_nth_post": 5,
-  "character": "Kolodko: a small solid-black firewood log with a visible lighter end-grain ring face, white dot eyes, two tiny thin stick arms and two tiny thin legs, blank serious deadpan expression, slightly uneven hand-drawn shape. Not cute, not a mascot, slightly bizarre.",
-  "style": "One standalone 1:1 square illustration. Pure white background. Minimalist black hand-drawn line art with slightly wobbly pen lines. Lots of empty white space: main subject 40-60% of the canvas, at least 35% blank. Sparse accents only: orange for the main action path or fire, red only for one key point, blue only for a secondary note. No gradients, no shadows, no paper texture, no complex background, no commercial vector style, no infographic or slide look, no cute cartoon poster, no children's illustration, no realistic photo, no UI.",
-  "text_rule": "No text in the image, or at most two very short handwritten Ukrainian words. Never Chinese or Russian characters.",
+  "character": "Ivanovych: a stocky friendly Ukrainian man in his late 50s, short grey hair, big bushy grey mustache, rosy cheeks, round nose, warm sly smile. Wears a black quilted puffer vest with small orange word KOLODA on the chest, orange shirt with rolled sleeves, brown work cargo trousers, dark leather work boots with orange laces. Often holds a steel thermos.",
+  "style": "One 1:1 square image. Stylized 3D animated movie character render, soft warm studio lighting, simple plain warm beige background or a simple cosy scene (woodpile, fireplace, Kyiv courtyard). One clear action, readable at phone size, little clutter.",
+  "text_rule": "No text in the image except the word KOLODA on the vest. Never Chinese or Russian characters.",
   "banned": "No war, weapons, explosions, soldiers, flags, politicians, real people, brand logos.",
-  "render": "Cartoon character: a small wooden firewood log with a pale round end-grain face, white dot eyes, thin stick arms and stick legs, deadpan look. Style: minimalist hand-drawn black ink doodle on a plain white background, wobbly pen lines, lots of empty white space, small orange accents, flat, square 1:1.",
+  "render": "The character is Ivanovych, a stocky Ukrainian man in his late 50s with short grey hair, a big bushy grey mustache, rosy cheeks and a warm sly smile, wearing a black quilted puffer vest with the orange word KOLODA on the chest, an orange shirt, brown cargo work trousers and dark work boots. Stylized 3D animated movie character render, soft warm studio lighting, simple warm beige background, square 1:1.",
   "render_note": "Short positive-only prompt for the image model. Negative lists (No ..., banned) go only to Gemini, never to the image model: Cloudflare's safety filter flags them."
 }
