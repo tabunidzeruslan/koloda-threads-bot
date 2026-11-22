@@ -45,6 +45,7 @@ jobs:
           cp .state/state.json /tmp/state.before
 
       - name: Tests
+        if: github.event_name == 'schedule'   # button presses skip the tests: answers come ~25 s faster
         run: python3 -m unittest discover -s tests -t . -q
 
       - name: Pillow for memes

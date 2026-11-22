@@ -7,7 +7,7 @@
 const DEBOUNCE_MS = 40_000;
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     if (url.pathname === "/health") return new Response("ok");
 
@@ -20,10 +20,14 @@ export default {
         await env.Q.put(`u:${String(upd.update_id).padStart(12, "0")}`, JSON.stringify(upd),
                         { expirationTtl: 3 * 86400 });
         await wake(env);
+        // show "друкує…" at the top of the chat while the bot starts, so the owner sees it is working
+        const chat = (upd.message && upd.message.chat && upd.message.chat.id) ||
+                     (upd.callback_query && upd.callback_query.message && upd.callback_query.message.chat.id);
+        if (chat && env.TG_TOKEN && ctx) ctx.waitUntil(typing(env, chat));
         // stop the button spinner at once: Telegram accepts a method call as the webhook response
         if (upd.callback_query) {
           return Response.json({ method: "answerCallbackQuery", callback_query_id: upd.callback_query.id,
-                                 text: "Прийнято ✅ Оновлю за хвилину" });
+                                 text: "Прийнято, виконую. Відповідь за пів хвилини" });
         }
       }
       return new Response("ok");
@@ -53,6 +57,16 @@ export default {
     return new Response("not found", { status: 404 });
   },
 };
+
+async function typing(env, chat) {
+  for (let i = 0; i < 6; i++) {          // ~30 s of "typing", the most a free Worker may keep going
+    await fetch(`https://api.telegram.org/bot${env.TG_TOKEN}/sendChatAction`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chat, action: "typing" }),
+    }).catch(() => {});
+    await new Promise((r) => setTimeout(r, 4500));
+  }
+}
 
 async function wake(env, force = false) {
   const last = Number((await env.Q.get("last_wake")) || 0);

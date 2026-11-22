@@ -47,6 +47,7 @@ def deploy(acc: str, token: str, *, tg_token: str, dispatch_token: str, repo: st
         {"type": "secret_text", "name": "WEBHOOK_SECRET", "text": derive(tg_token, "webhook")},
         {"type": "secret_text", "name": "PULL_SECRET", "text": derive(tg_token, "pull")},
         {"type": "secret_text", "name": "DISPATCH_TOKEN", "text": dispatch_token},
+        {"type": "secret_text", "name": "TG_TOKEN", "text": tg_token},
         {"type": "plain_text", "name": "REPO", "text": repo}]}
     import uuid  # multipart by hand: the module file needs its own content type
     b = uuid.uuid4().hex
