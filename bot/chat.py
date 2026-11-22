@@ -20,9 +20,16 @@ SYSTEM = """Ти помічник власника київської компа
 {"type": "rule_remove", "index": 0}                                          // номер з поточного списку правил
 {"type": "fact_add", "text": "факт про бізнес українською"}                  // новий товар, зона доставки, акція
 {"type": "fact_remove", "index": 0}
-{"type": "setting", "key": "schedule_on" | "auto_images", "value": true/false}
+{"type": "setting", "key": "schedule_on" | "auto_images" | "autopilot", "value": true/false}   // autopilot = постити без підтвердження
+{"type": "plan", "days": 1 | 2}                                              // показати/підготувати план на завтра чи післязавтра
 {"type": "draft", "kind": "post" | "sell" | "hype", "topic": "тема для hype або порожньо"}
 {"type": "draw", "topic": "що намалювати"}
+Якщо в контексті є «Чернетка в обговоренні», можна ще:
+{"type": "edit_text", "text": "ПОВНИЙ новий текст поста українською, з урахуванням побажання, дотепно, до 220 символів (продаючий до 260)"}
+{"type": "redraw", "hint": "що змінити в картинці, англійською або українською"}
+{"type": "remove_image"}
+{"type": "approve"}   // власник каже «публікуй», «ок, давай»
+{"type": "skip"}      // власник каже «не публікуй», «пропусти»
 {"type": "dev", "text": "що змінити в коді бота, детально російською"}       // все, чого не можна зробити правилами
 Правила:
 - Якщо власник просто питає, відповідай без змін ("changes": []).
@@ -33,7 +40,7 @@ SYSTEM = """Ти помічник власника київської компа
 - Ніколи не проси і не приймай токени, паролі, ключі. Якщо власник їх надсилає, скажи, що ключі вводяться тільки в GitHub Secrets."""
 
 
-def ask(gm, *, text: str, expertise: str = "", history: list[dict], rules: list[str], facts: list[str], settings: dict,
+def ask(gm, *, text: str, expertise: str = "", focus: str = "", history: list[dict], rules: list[str], facts: list[str], settings: dict,
         status: str, images: list | None = None) -> dict:
     ctx = (f"Поточні правила власника: {json.dumps(list(enumerate(rules)), ensure_ascii=False)}\n"
            f"Факти від власника: {json.dumps(list(enumerate(facts)), ensure_ascii=False)}\n"
@@ -41,6 +48,7 @@ def ask(gm, *, text: str, expertise: str = "", history: list[dict], rules: list[
            f"Стан бота: {status}\n"
            f"Твої знання (факти з джерелами і київський контекст): {expertise}\n"
            f"Остання розмова: {json.dumps(history[-10:], ensure_ascii=False)}\n\n"
+           + (f"Чернетка в обговоренні: {focus}\n" if focus else "") +
            f"Повідомлення власника: {text}")
     data = parse_json(gm.generate(ctx, system=SYSTEM, json_mode=True, temperature=0.4, images=images))
     if not isinstance(data, dict):
@@ -61,13 +69,25 @@ def describe(c: dict, rules: list[str], facts: list[str]) -> str:
         if t == "fact_remove":
             return f"➖ Убрать факт: {facts[int(c['index'])]}"
         if t == "setting":
-            name = {"schedule_on": "Расписание", "auto_images": "Авто-картинки"}.get(c.get("key"), "")
+            name = {"schedule_on": "Расписание", "auto_images": "Авто-картинки", "autopilot": "Автопилот (без подтверждения)"}.get(c.get("key"), "")
             return f"⚙️ {name}: {'вкл' if c.get('value') else 'выкл'}" if name else ""
         if t == "draft":
             return {"post": "✍️ Сделать черновик поста", "sell": "💰 Сделать продающий черновик",
                     "hype": f"🔥 Хайп-черновик: {c.get('topic', '')}"}.get(c.get("kind"), "")
         if t == "draw":
             return f"🎨 Нарисовать: {c.get('topic', '')}"
+        if t == "plan":
+            return f"📆 План на {'завтра' if int(c.get('days', 1)) == 1 else 'послезавтра'}"
+        if t == "edit_text":
+            return f"✏️ Новый текст: {c.get('text', '')}"
+        if t == "redraw":
+            return f"🎨 Перерисовать: {c.get('hint', '')}"
+        if t == "remove_image":
+            return "🗑 Убрать картинку"
+        if t == "approve":
+            return "✅ Опубликовать"
+        if t == "skip":
+            return "⏭ Не публиковать"
         if t == "dev":
             return f"🛠 Задача разработчику: {c.get('text', '')}"
     except (KeyError, IndexError, ValueError, TypeError):

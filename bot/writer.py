@@ -19,7 +19,9 @@ WAR = re.compile(r"\b(обстріл|шахед|ракет|ппо\b|тривог
 SWEAR = re.compile(r"\b(бля|хуй|хуя|піздец|пизд|їбан|ебан|сука|нахуй)", re.I)
 BANNED = ["варто зазначити", "важливо памʼятати", "важливо пам'ятати", "у підсумку", "отже,", "давайте розберемося",
           "давайте поговоримо", "в цій статті", "друзі,", "привіт, я", "уявіть собі світ", "незамінний помічник",
-          "ключовий фактор", "шановні"]
+          "ключовий фактор", "шановні", "стабільне тепло", "не підводить", "найкраще — просто", "найкраще - просто",
+          "затишок і тепло", "тепло і затишок", "атмосфера затишку", "подаруйте собі", "справжнє задоволення",
+          "якісні дрова за доступною", "ідеальний вибір"]
 RUSSIAN_LETTERS = re.compile(r"[ыэъёЫЭЪЁ]")
 EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿⬀-⯿️]")
 PHONE = re.compile(r"(\+?38)?\s?\(?0\d{2}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}")
@@ -103,7 +105,11 @@ def pick_rubrics(rubrics: list[dict], today: date, last: list[str], n: int, rnd:
     return chosen
 
 
-SYSTEM = """Ти пишеш пости для Threads від імені київського продавця дров Koloda. Пиши українською, як жива людина з дров'яного бізнесу, а не як маркетолог чи ШІ.
+SYSTEM = """ГОЛОВНЕ: кожен пост або реально корисний (конкретна порада, яку людина застосує сьогодні), або реально смішний,
+а найкраще і те, і інше. Пластмасові рекламні фрази («стабільне тепло», «не підводить», «затишок») = провал.
+Мета акаунта: продавати дрова і отримувати заявки, тому люди мають запамʼятати, що Koloda = сухі дрова, чесний обʼєм,
+доставка по Києву і області сьогодні.
+Ти пишеш пости для Threads від імені київського продавця дров Koloda. Пиши українською, як жива людина з дров'яного бізнесу, а не як маркетолог чи ШІ.
 Правила:
 - 2-6 коротких рядків, 100-220 символів разом. Перший рядок - гачок до 60 символів: впізнаваний біль, абсурд або несподіваний факт.
 - Мета: людина думає «та ну!», «у мене теж!» або «не згоден» і пише коментар.
@@ -403,6 +409,9 @@ with the picture. Each panel: 1-2 English sentences naming the characters by the
 "scene": a cosy or informative picture WITHOUT any person or character (firewood, fireplace, stove, stacked wood, pellets, delivery
 truck at a Kyiv-region house). Use it for calm, useful, warm posts. 1-2 English sentences, positive wording.
 
+Captions: a caption is its own joke with a twist at the end (format setup -> unexpected punchline), it must NOT retell
+the post and must NOT be a bare juxtaposition like "X happened / and we have dry oak". If you cannot write a caption
+that would make a Kyiv person smirk, choose "scene" mode instead.
 If firewood, pellets or briquettes appear, describe them exactly as the firewood guide says.
 For a trending topic, show it only through generic props as the trend rule says.
 Return only JSON:
@@ -430,7 +439,7 @@ def meme_formats() -> dict:
         return {}
 
 
-def image_prompt(gm: Gemini, post_text: str, topic: str = "") -> dict:
+def image_prompt(gm: Gemini, post_text: str, topic: str = "", hint: str = "") -> dict:
     """Returns {"mode": "meme", "layout", "panels": [prompts], "captions", "idea"} or {"mode": "scene", "prompt", "idea"}."""
     il = load("illustration.json")
     fm = meme_formats()
@@ -450,6 +459,8 @@ def image_prompt(gm: Gemini, post_text: str, topic: str = "") -> dict:
              f"Meme formats: {json.dumps(formats, ensure_ascii=False)}\n"
              f"Humour rules: {json.dumps(hum.get('principles', [])[:12], ensure_ascii=False)}")
     trend = f"\n\nTrending topic behind the post: {topic}. Prefer a meme." if topic else ""
+    if hint:
+        trend += f"\n\nOWNER'S WISH for this image (follow it): {hint}"
     data = parse_json(gm.generate(f"{rules}{trend}\n\nPost:\n{post_text}", system=ILLUSTRATOR, json_mode=True, temperature=0.9))
     idea = str(data.get("idea", ""))[:200]
     if data.get("mode") == "meme" and data.get("format") in fm and data.get("panels"):

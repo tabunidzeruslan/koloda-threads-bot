@@ -374,6 +374,13 @@ class Bot:
             self.tg.answer(cq["id"], "Убрал картинку")
             self.tg.edit(self.owner, msg_id, f"Картинку убрал, черновик ниже\n\n{text}")
             self.send_draft(sl)
+        elif action == "ds":
+            self.tg.answer(cq["id"], "Пишите, что не так")
+            self.s["chat_mode"] = now_kyiv().isoformat()
+            self.s["chat_focus"] = sl["id"]
+            self.say("💬 Что поправить в этом посте или картинке? Пишите обычными словами: «сделай смешнее», "
+                     "«убери последнюю фразу», «на картинке пусть Денис колет дрова», «картинка не нужна».",
+                     buttons=[[("🚪 Закончить обсуждение", "m|chatoff")]])
         elif action == "sk":
             sl["status"] = "skipped"
             self.tg.answer(cq["id"], "Пропускаю")
@@ -384,6 +391,7 @@ class Bot:
         on = self.s["schedule_on"] and not self.s.get("paused_reason")
         self.say(self.status_text(), buttons=[
             [("⏸ Выключить расписание", "m|off") if on else ("▶️ Включить расписание", "m|on")],
+            [("📆 Завтра", "m|plan|1"), ("📆 Послезавтра", "m|plan|2")],
             [("🤫 Тишина сегодня", "m|quiet"), ("✍️ Пост сейчас", "m|postmenu")]])
 
     def menu_post(self) -> None:
@@ -427,6 +435,7 @@ class Bot:
             [("⏸ Выключить расписание", "m|off") if on else ("▶️ Включить расписание", "m|on")],
             [("🤫 Тишина сегодня", "m|quiet"), ("🔔 Отменить тишину", "m|unquiet")],
             [(f"🖼 Авто-картинки: {'вкл' if auto else 'выкл'}", "m|autoimg"), ("📋 Мои правила", "m|rules")],
+            [(f"🤖 Автопилот: {'вкл' if self.s.get('autopilot') else 'выкл'}", "m|autopilot")],
             [("👀 3 пробных поста", "m|preview"), ("🩺 Проверка", "m|selftest")]])
 
     def menu_help(self) -> None:
@@ -449,6 +458,13 @@ class Bot:
             self.s["auto_images"] = not self.s.get("auto_images", True)
             self.say("🖼 Авто-картинки " + ("включены: бот сам решает, где нужна картинка (до 1 в день + к хайпу)."
                                            if self.s["auto_images"] else "выключены. Картинку можно добавить кнопкой под черновиком."))
+        elif what == "autopilot":
+            self.s["autopilot"] = not self.s.get("autopilot")
+            self.say("🤖 Автопилот включён: хорошие черновики (оценка 8+, факты проверены) выходят сами в своё время. "
+                     "Под каждым будет «Не публиковать» и «Обсудить»." if self.s["autopilot"] else
+                     "🤖 Автопилот выключен: публикую только после вашей кнопки.")
+        elif what.startswith("plan|"):
+            self.plan_ahead(int(what.partition("|")[2] or 1))
         elif what == "postmenu":
             self.menu_post()
         elif what in ("post", "sell"):
@@ -475,6 +491,7 @@ class Bot:
             self.say(self.selftest())
         elif what == "chatoff":
             self.s.pop("chat_mode", None)
+            self.s.pop("chat_focus", None)
             self.say("Вышел из чата. Меню внизу 👇", keyboard=MENU)
         elif what == "rules":
             self.menu_rules()
@@ -526,7 +543,13 @@ class Bot:
         hist = self.s.setdefault("chat_log", [])
         try:
             expertise = (" | ".join(writer.knowledge_sample(n=25)) + "\n" + writer.kyiv_context(self.now.date()))
-            res = chat.ask(self.gm, text=text, history=hist, expertise=expertise, rules=self.s.get("owner_rules", []),
+            fsl = self.find_slot(self.s.get("chat_focus") or "")
+            focus = ""
+            if fsl and fsl.get("draft"):
+                fd = fsl["draft"]
+                focus = json.dumps({"text": fd.get("text"), "kind": fsl["kind"], "time": hhmm(fsl["at"]),
+                                    "image": (fd.get("image") or {}).get("idea", "немає")}, ensure_ascii=False)
+            res = chat.ask(self.gm, text=text, history=hist, expertise=expertise, focus=focus, rules=self.s.get("owner_rules", []),
                            facts=self.s.get("owner_facts", []),
                            settings={"schedule_on": self.s["schedule_on"], "auto_images": self.s.get("auto_images", True)},
                            status=self.status_text(), images=images)
@@ -539,7 +562,8 @@ class Bot:
         described = [(c, d) for c, d in described if d]
         if not described:
             return self.say(res["reply"] or "…")
-        if all(c["type"] in ("draft", "draw") for c, _ in described):
+        instant = ("draft", "draw", "plan", "edit_text", "redraw", "remove_image", "approve", "skip")
+        if all(c["type"] in instant for c, _ in described):
             self.say(res["reply"] or "Делаю.")
             return self.apply_changes([c for c, _ in described])
         pid = int(time.time()) % 100000
@@ -566,10 +590,10 @@ class Bot:
             elif t == "fact_add" and c.get("text"):
                 facts_.append(str(c["text"])[:300])
                 done.append("факт добавлен")
-            elif t == "setting" and c.get("key") in ("schedule_on", "auto_images"):
+            elif t == "setting" and c.get("key") in ("schedule_on", "auto_images", "autopilot"):
                 self.s[c["key"]] = bool(c.get("value"))
                 done.append(f"{c['key']} = {bool(c.get('value'))}")
-            elif t in ("draft", "draw", "dev"):
+            elif t in ("draft", "draw", "dev", "plan", "edit_text", "redraw", "remove_image", "approve", "skip"):
                 later.append(c)
         del rules_[30:]
         del facts_[30:]
@@ -577,16 +601,50 @@ class Bot:
         if done:
             self.say("✅ Готово: " + "; ".join(done))
         self.persist()
+        fsl = self.find_slot(self.s.get("chat_focus") or "")
+        touched = False
         for c in later:
-            if c["type"] == "draw":
+            t = c["type"]
+            if t in ("edit_text", "redraw", "remove_image", "approve", "skip"):
+                if not fsl or not fsl.get("draft") or fsl["status"] not in ("sent", "approved", "new"):
+                    self.say("Не нашёл черновик для правки, он уже опубликован или пропущен.")
+                    continue
+                d = fsl["draft"]
+                if t == "edit_text" and c.get("text"):
+                    d.update({"text": str(c["text"]).strip()[:500], "score": d.get("score"), "fact": d.get("fact")})
+                    touched = True
+                elif t == "redraw":
+                    fsl["want_image"], fsl["image_hint"] = True, str(c.get("hint") or "")[:400]
+                    d.pop("image", None)
+                    self.say("🎨 Перерисовываю…")
+                    self.add_image(fsl)
+                    touched = True
+                elif t == "remove_image":
+                    fsl["want_image"] = False
+                    d.pop("image", None)
+                    touched = True
+                elif t == "approve":
+                    fsl["status"] = "approved"
+                    self.say(f"✅ Одобрено, выйдет около {hhmm(fsl['at'])}.")
+                elif t == "skip":
+                    fsl["status"] = "skipped"
+                    self.say("⏭ Пропускаю этот пост.")
+                continue
+            if t == "plan":
+                self.plan_ahead(int(c.get("days") or 1))
+            elif t == "draw":
                 self.draw(str(c.get("topic") or ""))
-            elif c["type"] == "draft":
+            elif t == "draft":
                 if c.get("kind") == "hype" and c.get("topic"):
                     self.make_hype(str(c["topic"]), url="", source="ваш чат")
                 else:
                     self.make_now(sell=c.get("kind") == "sell")
-            elif c["type"] == "dev":
+            elif t == "dev":
                 self.dev_request(str(c.get("text") or ""))
+        if touched and fsl:
+            if fsl.get("msg_id") and self.tg and self.owner:
+                self.tg.edit(self.owner, fsl["msg_id"], "✏️ Обновлено, новая версия ниже.")
+            self.send_draft(fsl, note="✏️ Исправленный черновик:")
 
     def dev_request(self, text: str) -> None:
         """Things the bot cannot change itself go to GitHub Issues: the developer (Claude) picks them up."""
@@ -718,31 +776,70 @@ class Bot:
                     if sl.get("msg_id") and self.tg and self.owner:
                         self.tg.edit(self.owner, sl["msg_id"], "⌛ День закончился, этот черновик не опубликован.\n\n"
                                      + (sl.get("draft") or {}).get("text", ""))
-        for day in sorted(self.s["days"])[:-3]:
+        for day in [d for d in sorted(self.s["days"]) if d < today][:-2]:
             del self.s["days"][day]
 
     def plan_today(self) -> None:
-        key = self.today_key()
-        if key in self.s["days"] or not self.s["schedule_on"] or self.now.hour < 6:
+        if self.now.hour < 6:
             return
+        self.plan_day(self.today_key(), self.now.date())
+
+    def plan_day(self, key: str, day_date) -> bool:
+        if key in self.s["days"] or not self.s["schedule_on"]:
+            return False
+        today = key == self.today_key()
         slots = []
-        for i, at in enumerate(make_slots(self.rnd)):
-            if at < minutes_of(self.now) - 30:
+        times = make_slots(self.rnd)
+        for i, at in enumerate(times):
+            if today and at < minutes_of(self.now) - 30:
                 continue  # window already passed (bot switched on mid-day)
             self.s["planned_total"] += 1
-            kind = "sell" if self.s["planned_total"] % 5 == 0 else "hook"
+            kind = "sell" if i == len(times) - 1 else "hook"  # evening post sells: one per day, with wit
             slots.append({"id": f"{key[5:7]}{key[8:]}-{i}", "at": at, "kind": kind, "status": "new",
                           "tries": 0, "rejects": 0, "v": 0, "draft": None, "msg_id": None,
-                          "want_image": False})
+                          "want_image": False, "day": key})
         self.s["days"][key] = {"slots": slots}
         try:
             self.s["weather"] = trends.fetch_weather()
         except Exception as e:
             log("weather failed:", e)
-        event = trends.weather_event(self.s.get("weather"))
+        event = trends.weather_event(self.s.get("weather")) if today else None
         hooks = [x for x in slots if x["kind"] == "hook"]
         if event and hooks:
             hooks[-1]["topic"] = event + " Пост про це: погода як привід подумати про сухі дрова, з гумором."
+        return True
+
+    def plan_ahead(self, days: int) -> None:
+        """Owner asked for tomorrow / the day after: make that day's plan and drafts now."""
+        from datetime import timedelta
+        days = max(1, min(int(days or 1), 2))
+        d = self.now.date() + timedelta(days=days)
+        key = d.isoformat()
+        if key not in self.s["days"]:
+            was = self.s["schedule_on"]
+            self.s["schedule_on"] = True
+            self.plan_day(key, d)
+            self.s["schedule_on"] = was
+        self.say(f"📆 Готовлю план на {d.strftime('%d.%m')}: черновики пришлю по одному, одобряйте как обычно.")
+        self.draft_pending(force=True)
+        self.persist()
+
+    def morning_brief(self) -> None:
+        """Once a day after 8:00: what is planned today, after the drafts are ready."""
+        key = self.today_key()
+        if self.s.get("brief_day") == key or self.now.hour < 8 or not self.s["schedule_on"]:
+            return
+        sl = self.slots()
+        if not sl or any(x["status"] == "new" for x in sl):
+            return
+        self.s["brief_day"] = key
+        lines = ["☀️ Доброе утро! План на сегодня:"]
+        for x in sl:
+            text = ((x.get("draft") or {}).get("text") or "").split("\n")[0][:70]
+            lines.append(f"{hhmm(x['at'])} {'💰' if x['kind'] == 'sell' else '📝'} {STATUS_RU.get(x['status'], x['status'])}: {text}")
+        lines.append("\nЧерновики выше, одобряйте или жмите «Обсудить». " +
+                     ("Автопилот включён: одобренные ботом выйдут сами." if self.s.get("autopilot") else ""))
+        self.say("\n".join(lines))
 
     def time_left(self) -> bool:
         return time.monotonic() - self.started < TIME_BUDGET
@@ -750,11 +847,15 @@ class Bot:
     def quiet(self) -> bool:
         return self.s.get("quiet_day") == self.today_key()
 
-    def draft_pending(self) -> None:
-        if not self.s["schedule_on"] or self.s.get("paused_reason") or not self.gm or self.quiet():
+    def draft_pending(self, force: bool = False) -> None:
+        if not force and (not self.s["schedule_on"] or self.s.get("paused_reason") or self.quiet()):
+            return
+        if not self.gm:
             return
         made = 0
-        for sl in self.slots():
+        today = self.today_key()
+        upcoming = [x for k in sorted(self.s["days"]) if k >= today for x in self.s["days"][k]["slots"]]
+        for sl in upcoming:
             if sl["status"] != "new" or made >= MAX_GEN_PER_RUN or not self.time_left():
                 continue
             if sl.get("draft") and (sl["draft"].get("fact") == "owner" or sl.get("want_image")):
@@ -817,7 +918,7 @@ class Bot:
         d = sl["draft"]
         try:
             topic = sl.get("topic", "") if sl.get("kind") == "hype" else ""
-            res, ip = self.render_image(d["text"], topic)
+            res, ip = self.render_image(d["text"], topic, hint=sl.pop("image_hint", ""))
         except Exception as e:
             log("image failed:", e)
             d["image_error"] = net.scrub(str(e))[:200]
@@ -826,9 +927,9 @@ class Bot:
         d.pop("image_error", None)
         self._image_bytes = res["bytes"]
 
-    def render_image(self, text: str, topic: str = "") -> tuple[dict, dict]:
+    def render_image(self, text: str, topic: str = "", hint: str = "") -> tuple[dict, dict]:
         """Meme with Ivanovych (panels + captions in meme fonts) or a cosy scene without him."""
-        ip = writer.image_prompt(self.gm, text, topic=topic)
+        ip = writer.image_prompt(self.gm, text, topic=topic, hint=hint)
         if ip["mode"] == "meme":
             shots = [self.images.generate(p, log=log, character=True, cast=ip.get("cast")) for p in ip["panels"]]
             data = shots[0]["bytes"]
@@ -860,16 +961,22 @@ class Bot:
         if sl["kind"] == "hype" and not note:
             note = (f"🔥 Хайп ({sl.get('source', '')}): {sl.get('topic', '')[:150]}\n{sl.get('url') or ''}\n"
                     f"оценка {d.get('score')}/10 · {fact}").strip()
-        head = note or (f"📝 Черновик на {hhmm(sl['at'])}" + (" · продающий" if sl["kind"] == "sell" else "")
+        when = hhmm(sl["at"]) if sl.get("day", self.today_key()) == self.today_key() else \
+            f"{sl['day'][8:10]}.{sl['day'][5:7]} {hhmm(sl['at'])}"
+        head = note or (f"📝 Черновик на {when}" + (" · продающий" if sl["kind"] == "sell" else "")
                         + f" · {d.get('rubric', '')} · оценка {d.get('score')}/10 · {fact}")
         if d.get("fact_note") and d.get("fact") != "ok":
             head += f"\n({d['fact_note']})"
         img = d.get("image")
         ref = f"{sl['id']}|{sl['v']}"
-        buttons = [[("✅ Опубликовать", f"ok|{ref}")],
+        buttons = [[("✅ Опубликовать", f"ok|{ref}"), ("💬 Обсудить", f"ds|{ref}")],
                    [("🔁 Другой текст", f"re|{ref}"), ("⏭ Пропустить", f"sk|{ref}")],
-                   [("🎨 Другая картинка", f"im|{ref}"), ("🖼 Без картинки", f"ni|{ref}")] if img
+                   [("🎨 Другая картинка", f"im|{ref}"), ("🗑 Убрать картинку", f"ni|{ref}")] if img
                    else [("🎨 Добавить картинку", f"im|{ref}")]]
+        auto = (self.s.get("autopilot") and (d.get("score") or 0) >= 8 and d.get("fact") in ("ok", "fixed", "nosearch", "owner"))
+        if auto:
+            head = f"🤖 Автопилот: выйдет в {when} сам. Не так? «Пропустить» или «Обсудить».\n" + head
+            buttons[0] = [("💬 Обсудить", f"ds|{ref}"), ("⏭ Не публиковать", f"sk|{ref}")]
         if img and d.get("image_auto"):
             head += f"\n🎨 Бот решил, что здесь нужна картинка: {d['image_auto']}"
         if d.get("image_error") and not img:
@@ -887,7 +994,7 @@ class Bot:
         if msg_id is None:
             msg_id = self.say(f"{head}\n\n{d['text']}", buttons)
         sl["msg_id"] = msg_id
-        sl["status"] = "sent"
+        sl["status"] = "approved" if auto else "sent"
 
     # ---------- publishing
     def publish_due(self) -> None:
@@ -1103,6 +1210,7 @@ class Bot:
         self.plan_today()
         self.publish_due()
         self.draft_pending()
+        self.morning_brief()
         self.check_trends()
         self.publish_due()
         self.maybe_refresh_token()
