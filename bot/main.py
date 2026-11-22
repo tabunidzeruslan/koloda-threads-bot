@@ -50,8 +50,8 @@ WORD_ACTIONS = {  # plain words, Russian or Ukrainian, without the emoji
     "коментарі": "menu_comments", "комментарии": "menu_comments", "налаштування": "menu_settings", "настройки": "menu_settings",
     "допомога": "menu_help", "помощь": "menu_help", "меню": "menu_help", "чат": "menu_chat", "чат з ботом": "menu_chat",
     "чат с ботом": "menu_chat", "повна свобода": "menu_freedom_on", "полная свобода": "menu_freedom_on",
-    "свобода": "menu_freedom_on", "клієнти": "find_buyers", "клиенты": "find_buyers", "пошук клієнтів": "find_buyers",
-    "поиск клиентов": "find_buyers", "стоп": "menu_freedom_off", "стоп свободи": "menu_freedom_off", "активувати": "menu_on", "активировать": "menu_on", "старт": "menu_on", "пауза": "menu_off"}
+    "свобода": "menu_freedom_on", "клієнти": "menu_buyers", "клиенты": "menu_buyers", "пошук клієнтів": "menu_buyers",
+    "поиск клиентов": "menu_buyers", "стоп": "menu_freedom_off", "стоп свободи": "menu_freedom_off", "активувати": "menu_on", "активировать": "menu_on", "старт": "menu_on", "пауза": "menu_off"}
 
 
 FREEDOM_ON, FREEDOM_OFF = "Повна свобода", "Стоп свободи"
@@ -1493,6 +1493,10 @@ class Bot:
     # ---------- buyers search (needs Meta approval of threads_keyword_search)
     BUYER_QUERIES = ["купити дрова", "де купити дрова", "дрова київ", "дрова з доставкою", "порадьте дрова",
                      "хто продає дрова", "дрова для каміна", "дрова для котла", "купить дрова"]
+
+    def menu_buyers(self) -> None:
+        self.say("Шукаю в Threads, хто шукає дрова, це до хвилини…")
+        self.find_buyers(force=True)
 
     def find_buyers(self, force: bool = False) -> None:
         """Daily at 11:00 Kyiv (or on /clients): fresh public posts of people looking for firewood.

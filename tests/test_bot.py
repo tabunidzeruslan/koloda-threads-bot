@@ -552,3 +552,12 @@ class BuyerSearchTests(unittest.TestCase):
         n = len(b.tg.sent)
         b.find_buyers(force=True)  # same post is not shown twice
         self.assertFalse(any("@olena" in str(t) for t in b.tg.sent[n:]))
+
+
+class BuyerWordTests(unittest.TestCase):
+    def test_word_runs_search_at_night(self):
+        b = make_bot(kyiv(4))
+        b.th.keyword_search = mock.Mock(return_value=[])
+        b.owner_turn(b.on_message, {"message_id": 5, "chat": {"id": 1, "type": "private"}, "text": "клієнти"})
+        b.th.keyword_search.assert_called()
+        self.assertTrue(any("не знайшов" in str(x) for x in b.tg.sent))
