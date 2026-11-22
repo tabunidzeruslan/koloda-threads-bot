@@ -58,7 +58,7 @@ GOOD = "Дуб чи граб? Знаю родини, де це питання г
 def make_bot(now, updates=None, s=None):
     s = s or st.load("/nonexistent")
     s["owner_chat_id"] = 1
-    s.setdefault("plan_v", 2)
+    s.setdefault("plan_v", 3)
     b = Bot(s, tg=FakeTG(updates), gm=mock.Mock(model="m"), threads_secret="tok_secret_123",
             enc_key="k", now=now, rnd=random.Random(1))
     b.th = FakeThreads()
@@ -105,7 +105,7 @@ class MiscTests(unittest.TestCase):
         for seed in range(50):
             sl = make_slots(random.Random(seed))
             self.assertEqual(len(sl), 4)
-            self.assertTrue(all(b - a >= 110 for a, b in zip(sl, sl[1:])))
+            self.assertTrue(all(b - a >= 100 for a, b in zip(sl, sl[1:])))
 
     def test_rank_models(self):
         names = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-flash-image",
@@ -158,11 +158,11 @@ class FlowTests(unittest.TestCase):
         b2.tick()
         self.assertEqual(sl["status"], "approved")
         self.assertEqual(b2.th.published, [])  # slot time not reached yet
-        b3 = make_bot(kyiv(11, 5), s=b.s)
+        b3 = make_bot(kyiv(11, 20), s=b.s)
         b3.tick()
         self.assertEqual(sl["status"], "published")
         self.assertEqual(len(b3.th.published), 1)
-        b4 = make_bot(kyiv(11, 35), s=b.s)
+        b4 = make_bot(kyiv(11, 50), s=b.s)
         b4.tick()  # nothing new approved -> no second post
         self.assertEqual(len(b4.th.published), 0)
 
@@ -307,7 +307,8 @@ class PlanTests(unittest.TestCase):
         b.upgrade_plan()
         self.assertTrue(b.s["schedule_on"])
         self.assertNotIn("2026-11-23", b.s["days"])
-        self.assertIn("Нова стратегія з 22.11", b.tg.sent[-1][0])
+        self.assertTrue(any("Нова стратегія з 22.11" in t for t, _ in b.tg.sent))
+        self.assertIn("2026-11-22", b.s["days"])  # today planned right away for approval
 
     def test_plan_view_and_approve_all(self):
         b = make_bot(kyiv(7))

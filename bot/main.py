@@ -67,9 +67,10 @@ LISTEN_SECONDS = 60  # after a scheduled run the bot keeps listening to Telegram
 MAX_GEN_PER_RUN = 2
 MAX_AUTO_IMAGES_PER_DAY = 1  # owner: at most one picture a day for all posts together, only if really needed
 MAX_HYPE_IMAGES_PER_DAY = 1  # plus one for a trend post
-TREND_HOURS = (9, 13, 17)   # Kyiv hours when the bot looks at Google Trends Ukraine
+TREND_HOURS = (10, 13, 17)   # Kyiv hours when the bot looks at Google Trends Ukraine
 MAX_HYPE_PER_DAY = 1  # 4 planned posts + 1 trend post = up to 5 a day
-PLAN_VERSION = 2
+PLAN_VERSION = 3
+BRIEF_HOUR = 10  # owner gets the day plan for approval at 10:00 Kyiv
 HYPE_SPACING_MIN = 30
 TIME_BUDGET = 6 * 60
 
@@ -132,13 +133,13 @@ def daily_plan() -> list[dict]:
 
 STRATEGY_MSG = ("📋 Нова стратегія з {date}:\n\n"
                 "Щодня 4 пости за планом + 1 на гарячу тему дня (до 5):\n"
-                "• 08:30–09:30 Ранкова користь: порада, яку зберігають (обʼєм, сушка, які дрова куди)\n"
-                "• 11:30–13:00 Спір дня: гостра думка або вибір А/Б, щоб писали в коментарях\n"
-                "• 15:00–16:30 Побут і гумор: київська або дачна ситуація, мем\n"
+                "• 10:30–11:15 Ранкова користь: порада, яку зберігають (обʼєм, сушка, які дрова куди)\n"
+                "• 13:00–14:00 Спір дня: гостра думка або вибір А/Б, щоб писали в коментарях\n"
+                "• 16:00–17:00 Побут і гумор: київська або дачна ситуація, мем\n"
                 "• 19:00–20:30 Вечірній продаж: одна причина замовити зараз + контакт\n"
                 "• 🔥 Хайп: якщо Київ про щось гуде, реакція з логічним містком до тепла\n\n"
                 "Картинка максимум одна на день і тільки якщо дуже треба. Продаючий завжди без картинки.\n\n"
-                "Чернетки на день готую з 6:00, о 8:00 надішлю план. Ваша дія: «📅 План» → «✅ Схвалити всі». "
+                "Щодня о 10:00 за Києвом надсилаю план дня на схвалення. Ваша дія: «📅 План» → «✅ Схвалити всі». "
                 "Якщо щось не так: натисніть пост → «💬 Обговорити» → напишіть що змінити.")
 
 
@@ -498,7 +499,7 @@ class Bot:
         if self.quiet():
             lines.append("🤫 Сьогодні тиша.")
         if not sl:
-            lines.append("Постів на сьогодні ще немає. План складається о 6:00 за Києвом, чернетки приходять до 8:00.")
+            lines.append("Постів на сьогодні ще немає. План складається з 6:00 за Києвом, о 10:00 надішлю його на схвалення.")
         icons = {"approved": "✅", "published": "🟢", "sent": "🕓", "new": "✍️", "skipped": "⏭",
                  "expired": "⌛", "failed": "⚠️", "publishing": "⏳"}
         rows = []
@@ -975,7 +976,7 @@ class Bot:
     def plan_ahead(self, days: int) -> None:
         """Owner asked for tomorrow / the day after: make that day's plan and drafts now."""
         from datetime import timedelta
-        days = max(1, min(int(days or 1), 2))
+        days = max(0, min(int(days if days is not None else 1), 2))
         d = self.now.date() + timedelta(days=days)
         key = d.isoformat()
         if key not in self.s["days"]:
@@ -983,9 +984,11 @@ class Bot:
             self.s["schedule_on"] = True
             self.plan_day(key, d)
             self.s["schedule_on"] = was
-        self.say(f"📆 Готую план на {d.strftime('%d.%m')}: чернетки надішлю по одній, схвалюйте як завжди.")
+        self.say(f"📆 Готую план на {d.strftime('%d.%m')}: чернетки надішлю по одній, потім список на схвалення.")
         self.draft_pending(force=True)
         self.persist()
+        if days == 0:
+            self.menu_plan()
 
     # ---------- comments under our posts
     def check_comments(self, force: bool = False) -> None:
@@ -1062,7 +1065,7 @@ class Bot:
     def morning_brief(self) -> None:
         """Once a day after 8:00: what is planned today, after the drafts are ready."""
         key = self.today_key()
-        if self.s.get("brief_day") == key or self.now.hour < 8 or not self.s["schedule_on"]:
+        if self.s.get("brief_day") == key or self.now.hour < BRIEF_HOUR or not self.s["schedule_on"]:
             return
         sl = self.slots()
         if not sl or any(x["status"] == "new" for x in sl):
@@ -1087,7 +1090,7 @@ class Bot:
         today = self.today_key()
         upcoming = [x for k in sorted(self.s["days"]) if k >= today for x in self.s["days"][k]["slots"]]
         for sl in upcoming:
-            if sl["status"] != "new" or made >= MAX_GEN_PER_RUN or not self.time_left():
+            if sl["status"] != "new" or made >= (5 if force else MAX_GEN_PER_RUN) or not self.time_left():
                 continue
             if sl.get("draft") and (sl["draft"].get("fact") == "owner" or sl.get("want_image")):
                 if sl.get("want_image") and not sl["draft"].get("image"):
@@ -1461,8 +1464,10 @@ class Bot:
                     if x.get("msg_id") and x["status"] in ("sent", "approved") and self.tg and self.owner:
                         self.tg.edit(self.owner, x["msg_id"], "♻️ Старий план, замінено новим.\n\n" + (x.get("draft") or {}).get("text", ""))
                 del self.s["days"][day]
-        tomorrow = self.now.date() if self.now.hour < 6 else self.now.date() + __import__("datetime").timedelta(days=1)
-        self.say(STRATEGY_MSG.format(date=tomorrow.strftime("%d.%m")), keyboard=self.menu_kb())
+        start = self.now.date() if self.now.hour < 10 else self.now.date() + __import__("datetime").timedelta(days=1)
+        self.say(STRATEGY_MSG.format(date=start.strftime("%d.%m")), keyboard=self.menu_kb())
+        if self.now.hour < 10 and self.gm:  # owner wants to approve today's plan right away
+            self.plan_ahead(0)
 
     def tick(self) -> None:
         self.ensure_menu()

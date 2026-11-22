@@ -11,8 +11,9 @@ except Exception:  # very old tzdata
     TZ = ZoneInfo("Europe/Kiev")
 
 # (start, end) in minutes from midnight, from data/daily_plan.json; the selling slot is in the evening (17-20 peak)
-WINDOWS = [(8 * 60 + 30, 9 * 60 + 30), (11 * 60 + 30, 13 * 60), (15 * 60, 16 * 60 + 30), (19 * 60, 20 * 60 + 30)]
-MIN_GAP = 110
+# owner approves the day plan at 10:00 Kyiv, so the first post goes after 10:30
+WINDOWS = [(10 * 60 + 30, 11 * 60 + 15), (13 * 60, 14 * 60), (16 * 60, 17 * 60), (19 * 60, 20 * 60 + 30)]
+MIN_GAP = 100
 LAST_PUBLISH_MIN = 22 * 60 + 45  # do not publish after 22:45
 SPACING_MIN = 75                 # at least 75 minutes between our posts
 
