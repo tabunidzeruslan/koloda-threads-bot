@@ -464,6 +464,20 @@ def render_prompt(scene: str, il: dict | None = None, character: bool = True) ->
     return f"{scene.strip()}{wood}\n{tail}"
 
 
+def expert_brief() -> str:
+    """Company facts, FAQ, marketing strategy and image-generation guide for the owner chat."""
+    out = []
+    for name, keys in (("company.json", None), ("strategy.json", None), ("image_guide.json", ("how_it_works", "common_fixes"))):
+        try:
+            d = load(name)
+        except (OSError, ValueError):
+            continue
+        if keys:
+            d = {k: d.get(k) for k in keys}
+        out.append(f"{name}: {json.dumps(d, ensure_ascii=False)}")
+    return "\n".join(out)[:40000]
+
+
 def image_guide() -> dict:
     try:
         return load("image_guide.json")

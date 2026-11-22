@@ -568,7 +568,8 @@ class Bot:
             return self.say("Немає ключа Gemini, чат не працює.")
         hist = self.s.setdefault("chat_log", [])
         try:
-            expertise = (" | ".join(writer.knowledge_sample(n=25)) + "\n" + writer.kyiv_context(self.now.date()))
+            expertise = (" | ".join(writer.knowledge_sample(n=25)) + "\n" + writer.kyiv_context(self.now.date()) + "\n" +
+                         writer.expert_brief())
             fsl = self.find_slot(self.s.get("chat_focus") or "")
             focus = ""
             if fsl and fsl.get("draft"):
@@ -631,6 +632,10 @@ class Bot:
         touched = False
         for c in later:
             t = c["type"]
+            if t == "redraw" and not fsl and self.s.get("last_draw"):
+                self.say("🎨 Переписую запит і перемальовую…")
+                self.draw(str(c.get("hint") or ""), fix_of=True)
+                continue
             if t in ("edit_text", "redraw", "remove_image", "approve", "skip"):
                 if not fsl or not fsl.get("draft") or fsl["status"] not in ("sent", "approved", "new"):
                     self.say("Не знайшов чернетку для правки, її вже опубліковано або пропущено.")
@@ -1017,18 +1022,25 @@ class Bot:
         d = sl["draft"]
         try:
             topic = sl.get("topic", "") if sl.get("kind") == "hype" else ""
-            res, ip = self.render_image(d["text"], topic, hint=sl.pop("image_hint", ""))
+            res, ip = self.render_image(d["text"], topic, hint=sl.pop("image_hint", ""), previous=d.get("image_source"))
         except Exception as e:
             log("image failed:", e)
             d["image_error"] = net.scrub(str(e))[:200]
             return
         d["image"] = {"provider": res["provider"], "url": "", "idea": ip["idea"], "mode": ip["mode"]}
+        d["image_source"] = ip.get("source")
+        if ip.get("explain"):
+            d["image_auto"] = "виправлено: " + ip["explain"]
         d.pop("image_error", None)
         self._image_bytes = res["bytes"]
 
-    def render_image(self, text: str, topic: str = "", hint: str = "") -> tuple[dict, dict]:
-        """Meme with Ivanovych (panels + captions in meme fonts) or a cosy scene without him."""
-        ip = writer.image_prompt(self.gm, text, topic=topic, hint=hint)
+    def render_image(self, text: str, topic: str = "", hint: str = "", previous: dict | None = None) -> tuple[dict, dict]:
+        """Meme with the cast (panels + captions in meme fonts) or a cosy scene without people.
+        With hint + previous plan, the image doctor rewrites the previous prompt from the owner's complaint."""
+        if hint and previous:
+            ip = writer.fix_image_prompt(self.gm, post_text=text, previous=previous, complaint=hint)
+        else:
+            ip = writer.image_prompt(self.gm, text, topic=topic, hint=hint)
         if ip["mode"] == "meme":
             shots = [self.images.generate(p, log=log, character=True, cast=ip.get("cast")) for p in ip["panels"]]
             data = shots[0]["bytes"]
@@ -1039,7 +1051,7 @@ class Bot:
         res = self.images.generate(ip["prompt"], log=log, character=False)
         return {"bytes": res["bytes"], "provider": res["provider"]}, ip
 
-    def draw(self, topic: str) -> None:
+    def draw(self, topic: str, fix_of: bool = False) -> None:
         if not self.images or not self.gm:
             self.say("Картинки не налаштовані.")
             return
@@ -1047,8 +1059,15 @@ class Bot:
             self.say("Напишіть після /draw, що намалювати, наприклад: /draw Іванович міряє складометр рулеткою")
             return
         try:
-            res, ip = self.render_image(topic, topic=topic)
-            self.tg.send_photo(self.owner, res["bytes"], f"Пробна картинка (не публікується): {ip['idea']}"[:1000])
+            last = self.s.get("last_draw") or {}
+            fix = topic if fix_of else ""
+            res, ip = self.render_image(last.get("topic", topic) if fix_of else topic, topic=topic,
+                                        hint=fix, previous=last.get("source") if fix_of else None)
+            self.s["last_draw"] = {"topic": last.get("topic", topic) if fix_of else topic, "source": ip.get("source")}
+            cap = f"Пробна картинка (не публікується): {ip['idea']}"
+            if ip.get("explain"):
+                cap += f"\nЩо виправив: {ip['explain']}"
+            self.tg.send_photo(self.owner, res["bytes"], cap[:1000])
         except Exception as e:
             self.say(f"Не вийшло намалювати: {net.scrub(str(e))[:200]}")
 
