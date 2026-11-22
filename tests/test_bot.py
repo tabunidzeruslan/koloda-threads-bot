@@ -536,3 +536,19 @@ class LearnTests(unittest.TestCase):
         chk = lambda t: writer.check(t, sell=False, today=date(2026, 11, 22), recent=[], examples=[])
         self.assertIn("камерна", chk("У нас дрова камерної сушки, а у вас які? Пишіть, порадимо по породі"))
         self.assertIsNone(chk(GOOD))
+
+
+class BuyerSearchTests(unittest.TestCase):
+    def test_shows_new_buyer_posts_once(self):
+        b = make_bot(kyiv(11))
+        post = {"id": "77", "username": "olena", "text": "Порадьте, де купити дрова в Києві?",
+                "permalink": "https://threads.net/p/77", "timestamp": "2026-11-22T08:00:00+0000"}
+        own = dict(post, id="78", username="koloda_tm")
+        old = dict(post, id="79", timestamp="2026-11-10T08:00:00+0000")
+        b.th.keyword_search = mock.Mock(return_value=[post, own, old])
+        b.find_buyers()
+        self.assertEqual(sum("@olena" in t for t in map(str, b.tg.sent)), 1)
+        self.assertFalse(any("@koloda_tm" in str(t) for t in b.tg.sent))
+        n = len(b.tg.sent)
+        b.find_buyers(force=True)  # same post is not shown twice
+        self.assertFalse(any("@olena" in str(t) for t in b.tg.sent[n:]))

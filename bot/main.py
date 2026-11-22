@@ -50,7 +50,8 @@ WORD_ACTIONS = {  # plain words, Russian or Ukrainian, without the emoji
     "коментарі": "menu_comments", "комментарии": "menu_comments", "налаштування": "menu_settings", "настройки": "menu_settings",
     "допомога": "menu_help", "помощь": "menu_help", "меню": "menu_help", "чат": "menu_chat", "чат з ботом": "menu_chat",
     "чат с ботом": "menu_chat", "повна свобода": "menu_freedom_on", "полная свобода": "menu_freedom_on",
-    "свобода": "menu_freedom_on", "стоп": "menu_freedom_off", "стоп свободи": "menu_freedom_off", "активувати": "menu_on", "активировать": "menu_on", "старт": "menu_on", "пауза": "menu_off"}
+    "свобода": "menu_freedom_on", "клієнти": "find_buyers", "клиенты": "find_buyers", "пошук клієнтів": "find_buyers",
+    "поиск клиентов": "find_buyers", "стоп": "menu_freedom_off", "стоп свободи": "menu_freedom_off", "активувати": "menu_on", "активировать": "menu_on", "старт": "menu_on", "пауза": "menu_off"}
 
 
 FREEDOM_ON, FREEDOM_OFF = "Повна свобода", "Стоп свободи"
@@ -434,6 +435,8 @@ class Bot:
             self.menu_draw()
         elif cmd in ("/draw", "/малюй", "/рисуй"):
             self.draw(arg.strip() or (m.get("reply_to_message") or {}).get("text") or "")
+        elif cmd in ("/clients", "/клієнти", "/клиенты"):
+            self.find_buyers(force=True)
         elif cmd == "/trends":
             self.check_trends(force=True)
         elif cmd in ("/tysha", "/тиша", "/quiet"):
@@ -1487,6 +1490,46 @@ class Bot:
         if sl.get("msg_id") and self.tg and self.owner:
             self.tg.edit(self.owner, sl["msg_id"], f"🟢 Опубліковано {res.get('permalink', '')}\n\n{text}")
 
+    # ---------- buyers search (needs Meta approval of threads_keyword_search)
+    BUYER_QUERIES = ["купити дрова", "де купити дрова", "дрова київ", "дрова з доставкою", "порадьте дрова",
+                     "хто продає дрова", "дрова для каміна", "дрова для котла", "купить дрова"]
+
+    def find_buyers(self, force: bool = False) -> None:
+        """Daily at 11:00 Kyiv (or on /clients): fresh public posts of people looking for firewood.
+        Only shows links to the owner; answering is always manual."""
+        if not self.th:
+            return
+        if not force and (self.s.get("buyers_day") == self.today_key() or not (11 <= self.now.hour < 17)):
+            return
+        self.s["buyers_day"] = self.today_key()
+        me = (self.s.get("threads_username") or "koloda_tm").lower()
+        seen = set(self.s.get("seen_leads", []))
+        found, err = [], ""
+        for q in self.BUYER_QUERIES:
+            if not self.time_left():
+                break
+            try:
+                posts = self.th.keyword_search(q)
+            except Exception as e:
+                err = net.scrub(str(e))[:200]
+                break
+            for p in posts:
+                if p.get("id") in seen or (p.get("username") or "").lower() == me:
+                    continue
+                if since_minutes(p.get("timestamp", "").replace("+0000", "+00:00"), self.now) > 3 * 1440:
+                    continue
+                seen.add(p["id"])
+                found.append(p)
+        self.s["seen_leads"] = list(seen)[-400:]
+        if found:
+            lines = [f"Люди шукають дрова ({len(found)}). Відповідайте самі в Threads, коротко і без тиску:"]
+            for p in found[:8]:
+                lines.append(f"\n@{p.get('username', '?')}: {(p.get('text') or '').strip()[:160]}\n{p.get('permalink', '')}")
+            self.say("\n".join(lines), important=True)
+        elif force:
+            self.say("Нових постів про пошук дров не знайшов." + (f" Помилка: {err}" if err else
+                     " Поки Meta не схвалила доступ, пошук бачить тільки наші пости."))
+
     # ---------- self-learning
     def collect_metrics(self) -> None:
         """Once a day: views/likes/replies/reposts of our posts that are 1-14 days old."""
@@ -1738,6 +1781,7 @@ class Bot:
         self.publish_due()
         self.collect_metrics()
         self.learn()
+        self.find_buyers()
         self.maybe_refresh_token()
         self.s["last_run"] = self.now.isoformat()
 
