@@ -261,6 +261,10 @@ class Bot:
         if reply_to and m.get("photo") and not text.startswith("/"):
             return self.on_owner_photo(reply_to, m["photo"][-1]["file_id"])
         if reply_to and not text.startswith("/"):
+            for key, item in (self.s.get("replies") or {}).items():
+                if item.get("msg_id") == reply_to and item["status"] == "sent":
+                    item["answer"] = text[:480]
+                    return self.send_reply(key)
             return self.on_edit(reply_to, text)
         cmd, _, arg = text.partition(" ")
         cmd = cmd.split("@")[0].lower()
@@ -344,6 +348,21 @@ class Bot:
         if action == "m":
             self.tg.answer(cq["id"])
             return self.on_menu(rest)
+        if action in ("ra", "rr", "rs"):
+            item = (self.s.get("replies") or {}).get(rest)
+            if not item or item["status"] != "sent":
+                return self.tg.answer(cq["id"], "Уже неактуально")
+            self.tg.answer(cq["id"])
+            if action == "ra":
+                return self.send_reply(rest)
+            if action == "rs":
+                item["status"] = "skipped"
+                return self.tg.edit(self.owner, cq["message"]["message_id"], f"⏭ Без ответа: @{item['user']}: {item['comment'][:200]}")
+            dr = writer.reply_draft(self.gm, post=item["post"], comment=item["comment"] + "\n(дай інший варіант відповіді)",
+                                    author=item["user"] or "")
+            item["answer"] = dr["answer"]
+            return self.say(f"🔁 Другой вариант для @{item['user']}:\n{dr['answer']}",
+                            buttons=[[("✅ Ответить так", f"ra|{rest}"), ("🔁 Ещё", f"rr|{rest}")], [("⏭ Не отвечать", f"rs|{rest}")]])
         sid, _, ver = rest.partition("|")
         sl = self.find_slot(sid)
         if not sl or str(sl.get("v")) != ver or sl["status"] not in ("sent", "approved"):
@@ -741,7 +760,7 @@ class Bot:
             return self.say("💬 Под последними 5 постами комментариев пока нет.")
         out.sort(reverse=True)
         self.say("💬 Свежие комментарии:\n\n" + "\n\n".join(x for _, x in out[:10]) +
-                 "\n\nОтвечать пока лучше вручную в Threads. Скоро бот будет предлагать ответы кнопкой.")
+                 "\n\nНа новые комментарии бот сам присылает готовый ответ с кнопкой «Ответить».")
 
     def ensure_menu(self) -> None:
         if not self.tg or not self.owner or self.s.get("menu_v") == MENU_VERSION:
@@ -758,6 +777,7 @@ class Bot:
         end = time.monotonic() + seconds
         while time.monotonic() < end - 5:
             n = self.handle_updates(wait=int(min(25, end - time.monotonic())))
+            self.check_comments()
             if n:
                 self.now = now_kyiv()
                 self.publish_due()
@@ -823,6 +843,78 @@ class Bot:
         self.say(f"📆 Готовлю план на {d.strftime('%d.%m')}: черновики пришлю по одному, одобряйте как обычно.")
         self.draft_pending(force=True)
         self.persist()
+
+    # ---------- comments under our posts
+    def check_comments(self, force: bool = False) -> None:
+        if not self.th or not self.gm or not self.tg or not self.owner:
+            return
+        if not force and since_minutes(self.s.get("comments_checked"), now_kyiv()) < 10:
+            return
+        self.s["comments_checked"] = now_kyiv().isoformat()
+        try:
+            me = (self.s.get("me") or self.th.me().get("username") or "").lower()
+            self.s["me"] = me
+            posts = self.th.my_posts(5)
+        except Exception as e:
+            log("comments: posts failed:", e)
+            return
+        first = "seen_replies" not in self.s
+        seen = set(self.s.setdefault("seen_replies", []))
+        made = 0
+        for p in posts:
+            try:
+                reps = self.th.replies(p["id"])
+            except Exception as e:
+                log("comments: replies failed:", e)
+                continue
+            for r in reps:
+                rid = r.get("id")
+                if not rid or rid in seen:
+                    continue
+                seen.add(rid)
+                if first or (r.get("username") or "").lower() == me or made >= 3 or not self.time_left():
+                    continue  # first run: remember old comments without answering them
+                made += 1
+                self.draft_reply(p, r)
+        self.s["seen_replies"] = list(seen)[-400:]
+        self.persist()
+
+    def draft_reply(self, post: dict, r: dict) -> None:
+        try:
+            dr = writer.reply_draft(self.gm, post=post.get("text") or "", comment=r.get("text") or "",
+                                    author=r.get("username") or "")
+        except Exception as e:
+            log("reply draft failed:", e)
+            dr = {"type": "other", "answer": "", "safe": False, "lead": False}
+        reps = self.s.setdefault("replies", {})
+        key = str(len(reps) + 1) + "-" + r["id"][-6:]
+        item = {"id": r["id"], "user": r.get("username"), "comment": (r.get("text") or "")[:500],
+                "post": (post.get("text") or "")[:120], "link": post.get("permalink", ""), "answer": dr["answer"],
+                "type": dr["type"], "status": "sent"}
+        reps[key] = item
+        for k in list(reps)[:-30]:
+            del reps[k]
+        head = (f"💬 Комментарий от @{item['user']}{' · 🎯 похоже на клиента' if dr['lead'] else ''}"
+                f"{' · ⚠️ жалоба' if dr['type'] == 'complaint' else ''}:\n«{item['comment']}»\n"
+                f"↳ под постом «{item['post'][:60]}…» {item['link']}")
+        if dr["answer"] and self.s.get("autopilot") and dr["safe"] and dr["type"] in ("question", "praise"):
+            self.send_reply(key, note=head)
+            return
+        body = f"{head}\n\nПредлагаю ответить:\n{dr['answer']}" if dr["answer"] else f"{head}\n\nБот советует не отвечать."
+        item["msg_id"] = self.say(body + "\n\nСвой ответ: ответьте (Reply) на это сообщение.", buttons=[
+            [("✅ Ответить так", f"ra|{key}"), ("🔁 Другой ответ", f"rr|{key}")],
+            [("⏭ Не отвечать", f"rs|{key}")]])
+
+    def send_reply(self, key: str, note: str = "") -> None:
+        item = (self.s.get("replies") or {}).get(key)
+        if not item or item["status"] != "sent" or not item.get("answer"):
+            return
+        try:
+            self.th.publish_reply(item["answer"], item["id"])
+            item["status"] = "answered"
+            self.say((note + "\n\n" if note else "") + f"✅ Ответил @{item['user']}: {item['answer']}")
+        except Exception as e:
+            self.say(f"⚠️ Не смог ответить @{item['user']}: {net.scrub(str(e))[:200]}")
 
     def morning_brief(self) -> None:
         """Once a day after 8:00: what is planned today, after the drafts are ready."""
@@ -1211,6 +1303,7 @@ class Bot:
         self.publish_due()
         self.draft_pending()
         self.morning_brief()
+        self.check_comments()
         self.check_trends()
         self.publish_due()
         self.maybe_refresh_token()

@@ -337,6 +337,38 @@ def _day_diff(a: str, b: str) -> int:
     return min(d, d - 365, d + 365, key=abs)
 
 
+REPLIER = """Ти відповідаєш у Threads від імені київської компанії Koloda (дрова, пелети, брикети, доставка по Києву і області
+в день замовлення) на коментар під нашим постом. Українською, на «ви», від «ми», коротко (до 200 символів), по-людськи,
+з легким гумором, якщо доречно. Відповідай тільки перевіреними фактами з бази. Ціни не називай: запроси в дірект або на
+телефон 050 950 50 90. Питання = відповідь + мʼякий заклик замовити. Похвала = подяка з усмішкою. Скарга = співчуття,
+без суперечки, запроси в дірект розібратися. Троль/провокація = коротко і дотепно без образ, або не відповідати.
+Не вигадуй факти. Без війни, політики, мату.
+Відповідь тільки JSON: {"type": "question|praise|complaint|troll|other", "answer": "текст або порожньо", "safe": true/false,
+ "lead": true/false}   // safe = можна відповісти без перевірки власника; lead = людина схожа на потенційного покупця"""
+
+
+def reply_draft(gm: Gemini, *, post: str, comment: str, author: str) -> dict:
+    kb = {}
+    for name in ("company.json", "business.json"):
+        try:
+            kb[name] = load(name)
+        except (OSError, ValueError):
+            pass
+    try:
+        kb["reply_playbook"] = load("strategy.json").get("reply_playbook", [])
+    except (OSError, ValueError):
+        pass
+    ctx = (f"База: {json.dumps(kb, ensure_ascii=False)[:12000]}\n"
+           f"Перевірені факти ніші: {json.dumps(knowledge_sample(n=15), ensure_ascii=False)}\n"
+           f"Правила власника: {json.dumps(OWNER['rules'], ensure_ascii=False)}\n\n"
+           f"Наш пост: {post}\nКоментар від @{author}: {comment}")
+    data = parse_json(gm.generate(ctx, system=REPLIER, json_mode=True, temperature=0.6))
+    if not isinstance(data, dict):
+        return {"type": "other", "answer": "", "safe": False, "lead": False}
+    return {"type": str(data.get("type", "other")), "answer": str(data.get("answer") or "").strip()[:480],
+            "safe": bool(data.get("safe")), "lead": bool(data.get("lead"))}
+
+
 def factcheck(gm: Gemini, text: str, topic: str = "") -> tuple[str, str, str | None]:
     """Returns (status, text, note). status: ok | fixed | bad | unchecked."""
     current = text
