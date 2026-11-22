@@ -47,6 +47,23 @@ class Threads:
             pass
         return {"id": post_id, "permalink": link}
 
+    def publish_image(self, text: str, image_url: str) -> dict:
+        container = self._post("me/threads", media_type="IMAGE", image_url=image_url, text=text)["id"]
+        for _ in range(12):  # images need processing on Meta's side
+            time.sleep(5)
+            st = self._get(container, fields="status,error_message")
+            if st.get("status") == "FINISHED":
+                break
+            if st.get("status") in ("ERROR", "EXPIRED"):
+                raise net.NetError(400, st)
+        post_id = self._post("me/threads_publish", creation_id=container)["id"]
+        link = ""
+        try:
+            link = self._get(post_id, fields="permalink").get("permalink", "")
+        except net.NetError:
+            pass
+        return {"id": post_id, "permalink": link}
+
     def refresh(self) -> dict:
         return net.request("GET", "https://graph.threads.net/refresh_access_token",
                            params={"grant_type": "th_refresh_token", "access_token": self.token})

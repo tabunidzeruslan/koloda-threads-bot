@@ -10,6 +10,7 @@ import time
 from datetime import date, datetime
 
 from . import crypto, net, state as st, trends, writer
+from .images import Images
 from .gemini import Gemini
 from .schedule import (LAST_PUBLISH_MIN, SPACING_MIN, hhmm, make_slots, minutes_of, now_kyiv, since_minutes)
 from .telegram import Telegram
@@ -38,8 +39,9 @@ def log(*a):
 class Bot:
     def __init__(self, s: dict, *, tg: Telegram | None, gm: Gemini | None, threads_secret: str,
                  enc_key: str, chat_id_env: str = "", persist=lambda: None, now: datetime | None = None,
-                 rnd: random.Random | None = None):
+                 rnd: random.Random | None = None, images: Images | None = None):
         self.s, self.tg, self.gm = s, tg, gm
+        self.images = images
         self.threads_secret, self.enc_key = threads_secret, enc_key
         self.persist = persist
         self.now = now or now_kyiv()
@@ -163,7 +165,9 @@ class Bot:
             self.say("Похоже на ключ или токен. Я удалил сообщение: секреты вводятся только в GitHub → Settings → Secrets.")
             return
         reply_to = (m.get("reply_to_message") or {}).get("message_id")
-        if reply_to and not text.startswith("/") and not m.get("photo"):
+        if reply_to and m.get("photo") and not text.startswith("/"):
+            return self.on_owner_photo(reply_to, m["photo"][-1]["file_id"])
+        if reply_to and not text.startswith("/"):
             return self.on_edit(reply_to, text)
         cmd, _, arg = text.partition(" ")
         cmd = cmd.split("@")[0].lower()
@@ -213,6 +217,21 @@ class Bot:
                     return
         self.say("Не нашёл черновик, на который вы ответили (возможно, он уже опубликован или устарел).")
 
+    def slot_by_msg(self, msg_id: int) -> dict | None:
+        for d in self.s["days"].values():
+            for sl in d["slots"]:
+                if sl.get("msg_id") == msg_id and sl["status"] in ("sent", "approved"):
+                    return sl
+        return None
+
+    def on_owner_photo(self, msg_id: int, file_id: str) -> None:
+        sl = self.slot_by_msg(msg_id)
+        if not sl:
+            self.say("Не нашёл черновик, на который вы ответили картинкой.")
+            return
+        sl["draft"]["image"] = {"file_id": file_id, "provider": "ваша картинка", "url": ""}
+        self.send_draft(sl, note="Черновик с вашей картинкой:")
+
     def on_callback(self, cq: dict) -> None:
         if cq.get("from", {}).get("id") != self.owner and cq.get("message", {}).get("chat", {}).get("id") != self.owner:
             return
@@ -235,6 +254,18 @@ class Bot:
             self.tg.edit(self.owner, msg_id, f"🔁 Отклонено, готовлю другой вариант\n\n{text}")
             sl["status"] = "new" if sl["rejects"] < 4 else "skipped"
             sl["draft"] = None
+        elif action == "im":
+            sl["want_image"] = True
+            sl["draft"].pop("image", None)
+            sl["status"] = "new"
+            self.tg.answer(cq["id"], "Рисую картинку")
+            self.tg.edit(self.owner, msg_id, f"🎨 Рисую картинку к этому посту, пришлю при следующем запуске\n\n{text}")
+        elif action == "ni":
+            sl["want_image"] = False
+            sl["draft"].pop("image", None)
+            self.tg.answer(cq["id"], "Убрал картинку")
+            self.tg.edit(self.owner, msg_id, f"Картинку убрал, черновик ниже\n\n{text}")
+            self.send_draft(sl)
         elif action == "sk":
             sl["status"] = "skipped"
             self.tg.answer(cq["id"], "Пропускаю")
@@ -266,7 +297,8 @@ class Bot:
             self.s["planned_total"] += 1
             kind = "sell" if self.s["planned_total"] % 5 == 0 else "hook"
             slots.append({"id": f"{key[5:7]}{key[8:]}-{i}", "at": at, "kind": kind, "status": "new",
-                          "tries": 0, "rejects": 0, "v": 0, "draft": None, "msg_id": None})
+                          "tries": 0, "rejects": 0, "v": 0, "draft": None, "msg_id": None,
+                          "want_image": kind == "hook" and self.s["planned_total"] % 5 == 2})
         self.s["days"][key] = {"slots": slots}
         try:
             self.s["weather"] = trends.fetch_weather()
@@ -290,14 +322,20 @@ class Bot:
         for sl in self.slots():
             if sl["status"] != "new" or made >= MAX_GEN_PER_RUN or not self.time_left():
                 continue
-            if sl.get("draft") and sl["draft"].get("fact") == "owner":
+            if sl.get("draft") and (sl["draft"].get("fact") == "owner" or sl.get("want_image")):
+                if sl.get("want_image") and not sl["draft"].get("image"):
+                    made += 1
+                    self.add_image(sl)
                 self.send_draft(sl)
+                self.persist()
                 continue
             made += 1
             sl["tries"] += 1
             post = self.write(sl["kind"] == "sell", topic=sl.get("topic") or "")
             if post:
                 sl["draft"] = post
+                if sl.get("want_image") and self.time_left():
+                    self.add_image(sl)
                 self.send_draft(sl)
             elif sl["tries"] >= 5:
                 sl["status"] = "skipped"
@@ -320,6 +358,21 @@ class Bot:
                 self.s["gemini_model"] = self.gm.model
         return post
 
+    def add_image(self, sl: dict) -> None:
+        if not self.images or not self.gm:
+            return
+        d = sl["draft"]
+        try:
+            ip = writer.image_prompt(self.gm, d["text"])
+            res = self.images.generate(ip["prompt"], log=log)
+        except Exception as e:
+            log("image failed:", e)
+            d["image_error"] = net.scrub(str(e))[:200]
+            return
+        d["image"] = {"provider": res["provider"], "url": res["url"], "idea": ip["idea"]}
+        d.pop("image_error", None)
+        self._image_bytes = res["bytes"]
+
     def send_draft(self, sl: dict, note: str | None = None) -> None:
         d = sl["draft"]
         sl["v"] = sl.get("v", 0) + 1
@@ -332,9 +385,26 @@ class Bot:
                         + f" · {d.get('rubric', '')} · оценка {d.get('score')}/10 · {fact}")
         if d.get("fact_note") and d.get("fact") != "ok":
             head += f"\n({d['fact_note']})"
-        buttons = [[("✅ Опубликовать", f"ok|{sl['id']}|{sl['v']}")],
-                   [("🔁 Другой вариант", f"re|{sl['id']}|{sl['v']}"), ("⏭ Пропустить", f"sk|{sl['id']}|{sl['v']}")]]
-        msg_id = self.say(f"{head}\n\n{d['text']}", buttons)
+        img = d.get("image")
+        ref = f"{sl['id']}|{sl['v']}"
+        buttons = [[("✅ Опубликовать", f"ok|{ref}")],
+                   [("🔁 Другой текст", f"re|{ref}"), ("⏭ Пропустить", f"sk|{ref}")],
+                   [("🎨 Другая картинка", f"im|{ref}"), ("🖼 Без картинки", f"ni|{ref}")] if img
+                   else [("🎨 Добавить картинку", f"im|{ref}")]]
+        if d.get("image_error") and not img:
+            head += f"\n(картинка не получилась: {d['image_error'][:120]})"
+        msg_id = None
+        if img and self.tg and self.owner:
+            photo = getattr(self, "_image_bytes", None) or img.get("file_id")
+            self._image_bytes = None
+            try:
+                msg_id, img["file_id"] = self.tg.send_photo(self.owner, photo, f"{head}\n\n{d['text']}", buttons)
+                self.summary.append(f"[картинка] {head}\n\n{d['text']}")
+            except Exception as e:
+                log("send_photo failed:", e)
+                d.pop("image", None)
+        if msg_id is None:
+            msg_id = self.say(f"{head}\n\n{d['text']}", buttons)
         sl["msg_id"] = msg_id
         sl["status"] = "sent"
 
@@ -364,7 +434,20 @@ class Bot:
             for p in self.th.my_posts(5):
                 if (p.get("text") or "").strip() == text.strip():
                     raise RuntimeError("такой пост уже есть в Threads, повтор не публикую")
-            res = self.th.publish_text(text)
+            img = sl["draft"].get("image")
+            if img:
+                url = ""
+                if self.images and self.images.can_host and img.get("file_id"):
+                    url = self.images.host(self.tg.download(img["file_id"]), sl["id"])
+                elif img.get("url"):
+                    url = img["url"]
+                if url:
+                    res = self.th.publish_image(text, url)
+                else:
+                    self.say("⚠️ Нет хранилища для картинки (секрет MEDIA_TOKEN), публикую пост без неё.")
+                    res = self.th.publish_text(text)
+            else:
+                res = self.th.publish_text(text)
         except Exception as e:
             sl["status"] = "failed"
             self.s["fail_streak"] += 1
@@ -489,14 +572,16 @@ class Bot:
                 chk("Gemini, поиск Google", lambda: (self.gm.generate("Яка столиця України? Одне слово.", search=True, temperature=0)[:30]))
                 if self.gm.model:
                     self.s["gemini_model"] = self.gm.model
-                chk("Gemini, модели картинок", lambda: ", ".join(self.gm.image_models()[:3]) or "нет")
-
-                def img_test():
-                    mime, b64 = self.gm.image("A minimalist black ink line drawing of a single firewood log on a pure white background.")
-                    return f"{self.gm.image_model}, {len(b64) * 3 // 4 // 1024} КБ"
-                chk("Gemini, генерация картинки", img_test)
         else:
             out.append("❌ Нет секрета GEMINI_API_KEY")
+        if self.images:
+            def img_test():
+                res = self.images.generate("A minimalist black ink line drawing of a single firewood log on a pure white background.", log=log)
+                return f"{res['provider']}, {len(res['bytes']) // 1024} КБ"
+            out.append(f"ℹ️ Генераторы картинок: {', '.join(self.images.providers())}")
+            chk("Картинка", img_test)
+            out.append(("✅ Хранилище картинок: " + self.images.media_repo) if self.images.can_host
+                       else "⚠️ Нет секрета MEDIA_TOKEN: картинки с Cloudflare не опубликовать")
         return "\n".join(out)
 
     def preview(self, n: int) -> None:
@@ -542,8 +627,12 @@ def main(argv=None) -> int:
     gm_key = net.env("GEMINI_API_KEY")
     enc_key = net.env("STATE_KEY") or tg_token or "no-key"
     s = st.load(a.state)
-    bot = Bot(s, tg=Telegram(tg_token) if tg_token else None,
-              gm=Gemini(gm_key, s.get("gemini_model")) if gm_key else None,
+    gm = Gemini(gm_key, s.get("gemini_model")) if gm_key else None
+    images = Images(cf_account=net.env("CF_ACCOUNT_ID"), cf_token=net.env("CF_API_TOKEN"),
+                    gemini=gm if net.env("GEMINI_IMAGES") == "1" else None,
+                    media_repo=net.env("MEDIA_REPO") or "tabunidzeruslan/koloda-media", media_token=net.env("MEDIA_TOKEN"))
+    bot = Bot(s, images=images, tg=Telegram(tg_token) if tg_token else None,
+              gm=gm,
               threads_secret=th_token, enc_key=enc_key, chat_id_env=net.env("TELEGRAM_CHAT_ID"),
               persist=lambda: st.save(a.state, s))
     try:

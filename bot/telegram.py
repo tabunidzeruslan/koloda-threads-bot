@@ -31,18 +31,45 @@ class Telegram:
                         reply_markup=markup, disable_web_page_preview=True)
         return res["message_id"]
 
+    def send_photo(self, chat_id: int, photo: bytes | str, caption: str,
+                   buttons: list[list[tuple[str, str]]] | None = None) -> tuple[int, str]:
+        """photo: raw bytes or an existing Telegram file_id. Returns (message_id, file_id)."""
+        markup = None
+        if buttons:
+            markup = json.dumps({"inline_keyboard": [[{"text": t, "callback_data": d} for t, d in row] for row in buttons]})
+        fields = {"chat_id": chat_id, "caption": caption[:1024], "reply_markup": markup}
+        if isinstance(photo, str):
+            fields["photo"] = photo
+            body, ctype = net.multipart(fields, {})
+        else:
+            body, ctype = net.multipart(fields, {"photo": ("image.png", "image/png", photo)})
+        res = net.request_raw("POST", f"{self.base}/sendPhoto", body, ctype)
+        if not res.get("ok"):
+            raise net.NetError(200, res)
+        r = res["result"]
+        return r["message_id"], r["photo"][-1]["file_id"]
+
     def edit(self, chat_id: int, message_id: int, text: str) -> None:
         try:
             self.call("editMessageText", chat_id=chat_id, message_id=message_id, text=text[:4000],
                       disable_web_page_preview=True)
         except net.NetError:
-            pass  # message too old or unchanged: not important
+            try:  # photo messages have a caption instead of text
+                self.call("editMessageCaption", chat_id=chat_id, message_id=message_id, caption=text[:1024])
+            except net.NetError:
+                pass  # message too old or unchanged: not important
 
     def answer(self, callback_id: str, text: str = "") -> None:
         try:
             self.call("answerCallbackQuery", callback_query_id=callback_id, text=text[:190])
         except net.NetError:
             pass  # callbacks expire if the bot answers late; harmless
+
+    def download(self, file_id: str) -> bytes:
+        from urllib.request import urlopen
+        path = self.call("getFile", file_id=file_id)["file_path"]
+        with urlopen(self.base.replace("/bot", "/file/bot") + "/" + path, timeout=60) as r:
+            return r.read()
 
     def download_photo(self, file_id: str) -> tuple[str, str] | None:
         """Returns (mime, base64) of a photo the owner sent, or None."""

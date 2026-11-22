@@ -1,0 +1,8 @@
+{
+  "note": "Стиль ілюстрацій: адаптація стилю 'Ian Xiaohei Illustrations' (MIT, автор Ian, github.com/helloianneo/ian-xiaohei-illustrations) з власним героєм Колодько.",
+  "every_nth_post": 5,
+  "character": "Kolodko: a small solid-black firewood log with a visible lighter end-grain ring face, white dot eyes, two tiny thin stick arms and two tiny thin legs, blank serious deadpan expression, slightly uneven hand-drawn shape. Not cute, not a mascot, slightly bizarre.",
+  "style": "One standalone 1:1 square illustration. Pure white background. Minimalist black hand-drawn line art with slightly wobbly pen lines. Lots of empty white space: main subject 40-60% of the canvas, at least 35% blank. Sparse accents only: orange for the main action path or fire, red only for one key point, blue only for a secondary note. No gradients, no shadows, no paper texture, no complex background, no commercial vector style, no infographic or slide look, no cute cartoon poster, no children's illustration, no realistic photo, no UI.",
+  "text_rule": "No text in the image, or at most two very short handwritten Ukrainian words. Never Chinese or Russian characters.",
+  "banned": "No war, weapons, explosions, soldiers, flags, politicians, real people, brand logos."
+}

@@ -276,3 +276,19 @@ def write_post(gm: Gemini, *, today: date, sell: bool, recent: list[str], last_r
             continue
         return {"text": text, "rubric": v["rubric"], "score": sc, "why": why, "fact": status, "fact_note": note}
     return None
+
+
+ILLUSTRATOR = """You design one illustration for a Threads post of a Kyiv firewood brand. Invent ONE fresh absurd visual
+metaphor for the post's main idea, in which the character performs the core action (not decoration).
+Return only JSON: {"prompt": "full self-contained English image prompt", "idea": "one line in Ukrainian"}"""
+
+
+def image_prompt(gm: Gemini, post_text: str) -> dict:
+    il = load("illustration.json")
+    rules = f"Character: {il['character']}\nStyle: {il['style']}\nText: {il['text_rule']}\nBanned: {il['banned']}"
+    data = parse_json(gm.generate(f"{rules}\n\nPost:\n{post_text}", system=ILLUSTRATOR, json_mode=True, temperature=0.9))
+    prompt = str(data.get("prompt", "")).strip()
+    if not prompt:
+        raise ValueError("пустий промпт")
+    full = f"{prompt}\n\n{il['character']}\n{il['style']}\n{il['text_rule']}\n{il['banned']}"
+    return {"prompt": full, "idea": str(data.get("idea", ""))[:200]}
