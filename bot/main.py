@@ -645,9 +645,8 @@ class Bot:
         out += secret_shapes()
         if self.images:
             def img_test():
-                il = writer.load("illustration.json")
-                prompt = ("Kolodko stands seriously next to a neat stacked cubic meter of firewood and measures it with a "
-                          "tiny orange tape measure.\n" + il["character"] + "\n" + il["style"] + "\n" + il["text_rule"])
+                prompt = writer.render_prompt("The log character stands next to a neat stacked cubic meter of firewood "
+                                              "and measures it with a tiny orange tape measure.")
                 res = self.images.generate(prompt, log=log)
                 if self.tg and self.owner:
                     self.tg.send_photo(self.owner, res["bytes"], f"Пробная картинка: Колодько ({res['provider']})")

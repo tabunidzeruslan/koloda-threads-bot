@@ -9,6 +9,10 @@ from urllib.request import Request, urlopen
 from . import media, net
 
 
+SAFE_PROMPT = ("A small wooden firewood log cartoon character with white dot eyes and stick arms stands next to a neat "
+               "stack of firewood. Minimalist black ink doodle on a plain white background, small orange accents.")
+
+
 class Images:
     def __init__(self, *, cf_account: str = "", cf_token: str = "", gemini=None, media_repo: str = "",
                  media_token: str = "", pollinations: bool = False):
@@ -39,7 +43,14 @@ class Images:
         for p in self.providers():
             try:
                 if p == "cloudflare":
-                    return {"bytes": self._cloudflare(prompt), "provider": p, "url": ""}
+                    try:
+                        data = self._cloudflare(prompt)
+                    except Exception as e:
+                        if "nsfw" not in str(e).lower():
+                            raise
+                        log("cloudflare safety filter, retrying with a plain prompt")
+                        data = self._cloudflare(SAFE_PROMPT)
+                    return {"bytes": data, "provider": p, "url": ""}
                 if p == "gemini":
                     _, b64 = self.gemini.image(prompt)
                     return {"bytes": base64.b64decode(b64), "provider": p, "url": ""}

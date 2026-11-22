@@ -280,7 +280,15 @@ def write_post(gm: Gemini, *, today: date, sell: bool, recent: list[str], last_r
 
 ILLUSTRATOR = """You design one illustration for a Threads post of a Kyiv firewood brand. Invent ONE fresh absurd visual
 metaphor for the post's main idea, in which the character performs the core action (not decoration).
-Return only JSON: {"prompt": "full self-contained English image prompt", "idea": "one line in Ukrainian"}"""
+Return only JSON: {"prompt": "1-2 English sentences describing only the scene and action, positive wording, no lists of
+what to avoid, no style words", "idea": "one line in Ukrainian"}"""
+
+
+def render_prompt(scene: str, il: dict | None = None) -> str:
+    """Prompt for the image model: the scene plus a short positive-only description.
+    Negative lists stay out: Cloudflare's safety filter flags words like weapons or children."""
+    il = il or load("illustration.json")
+    return f"{scene.strip()}\n{il['render']}"
 
 
 def image_prompt(gm: Gemini, post_text: str) -> dict:
@@ -290,7 +298,7 @@ def image_prompt(gm: Gemini, post_text: str) -> dict:
     prompt = str(data.get("prompt", "")).strip()
     if not prompt:
         raise ValueError("пустий промпт")
-    full = f"{prompt}\n\n{il['character']}\n{il['style']}\n{il['text_rule']}\n{il['banned']}"
+    full = render_prompt(prompt, il)
     return {"prompt": full, "idea": str(data.get("idea", ""))[:200]}
 
 
