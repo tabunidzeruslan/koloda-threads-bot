@@ -11,7 +11,7 @@
   "firewood_render": "Firewood shown as split hardwood logs about 35 cm long with rough bark, pale split faces, visible growth rings and small cracks on the end faces, stacked in neat tight rows.",
   "trend_rule": "For a trending topic show it only through generic props and situations everyone recognises: a football in blue-and-white or yellow-and-blue team colours, a scarf, a TV or phone showing an unreadable screen, snow, a power bank and candle for blackouts, a holiday table, and so on. Ivanovych reacts to it in his own firewood world. Never draw real people or their faces, club crests, brand logos, flags, politics, war or weapons.",
   "usage": "Персонажі тільки в мемах і трендових ситуаціях, головний Іванович, інших додавати за потреби ролі. Затишні, теплі, інформативні картинки без персонажів.",
-  "scene_render": "Stylized 3D animated movie render, soft warm light, cosy and clean composition, simple background, no people, square 1:1.",
+  "scene_render": "Stylized 3D animated movie render, soft warm light, cosy and clean composition, plain surfaces without lettering, simple background, no people, square 1:1.",
   "cast": [
     {
       "id": "ivanovych",

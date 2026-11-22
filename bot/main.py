@@ -38,7 +38,7 @@ HELP = ("Усе є в меню кнопками внизу чату:\n"
         "Щоб виправити текст, дайте відповідь (Reply) на чернетку своїм текстом.")
 # owner asked (22.11.2026) for a minimal menu; the other actions still work by plain words (статистика, хайп, чат…)
 MENU = [["📅 План на сьогодні"]]
-MENU_VERSION = 4
+MENU_VERSION = 5
 CHAT_IDLE_MINUTES = 30
 MENU_ACTIONS = {"📅 План на сьогодні": "menu_plan", "📅 План": "menu_plan", "📊 Статистика": "menu_stats", "✍️ Пост зараз": "menu_post",
                 "🔥 Хайп": "menu_hype", "🎨 Картинка": "menu_draw", "💬 Коментарі": "menu_comments",
@@ -49,7 +49,15 @@ WORD_ACTIONS = {  # plain words, Russian or Ukrainian, without the emoji
     "пост сейчас": "menu_post", "хайп": "menu_hype", "тренды": "menu_hype", "тренди": "menu_hype", "картинка": "menu_draw",
     "коментарі": "menu_comments", "комментарии": "menu_comments", "налаштування": "menu_settings", "настройки": "menu_settings",
     "допомога": "menu_help", "помощь": "menu_help", "меню": "menu_help", "чат": "menu_chat", "чат з ботом": "menu_chat",
-    "чат с ботом": "menu_chat", "активувати": "menu_on", "активировать": "menu_on", "старт": "menu_on", "пауза": "menu_off"}
+    "чат с ботом": "menu_chat", "повна свобода": "menu_freedom_on", "полная свобода": "menu_freedom_on",
+    "свобода": "menu_freedom_on", "стоп": "menu_freedom_off", "стоп свободи": "menu_freedom_off", "активувати": "menu_on", "активировать": "menu_on", "старт": "menu_on", "пауза": "menu_off"}
+
+
+FREEDOM_ON, FREEDOM_OFF = "🚀 Повна свобода", "🛑 Стоп свободи"
+FREEDOM_MIN_SCORE = 7
+
+
+MENU_ACTIONS.update({FREEDOM_ON: "menu_freedom_on", FREEDOM_OFF: "menu_freedom_off"})
 
 
 def menu_word(text: str) -> str | None:
@@ -66,6 +74,7 @@ COMMANDS = [("menu", "Показати меню"), ("status", "План на с�
 AWAIT_MINUTES = 20
 LISTEN_SECONDS = 60  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
 MAX_GEN_PER_RUN = 2
+IMAGE_EVERY_DAYS = 3  # at most one automatic picture in 3 days
 MAX_AUTO_IMAGES_PER_DAY = 1  # owner: at most one picture a day for all posts together, only if really needed
 MAX_HYPE_IMAGES_PER_DAY = 1  # plus one for a trend post
 TREND_HOURS = (13, 17)  # extra checks if the morning scan found nothing safe
@@ -147,7 +156,7 @@ STRATEGY_MSG = ("📋 Нова стратегія з {date}:\n\n"
                 "• гарячі теми дня вплітаю і в звичайні пости, якщо місток смішний і логічний\n"
                 "• без посилань і хештегів у тексті, контакт телефоном або в дірект\n"
                 "• на коментарі відповідаємо в першу годину: я готую відповідь, ви тиснете «Відповісти»\n\n"
-                "Картинка максимум одна на день і тільки якщо дуже треба. Продаючий завжди без картинки.\n\n"
+                "Картинки дуже рідко (не частіше ніж раз на 3 дні) і завжди без тексту. Продаючий завжди без картинки.\n\n"
                 "Щодня о 10:00 за Києвом надсилаю план дня на схвалення. Ваша дія: «📅 План» → «✅ Схвалити всі». "
                 "Якщо щось не так: натисніть пост → «💬 Обговорити» → напишіть що змінити.")
 
@@ -498,12 +507,38 @@ class Bot:
     # ---------- menu
     def menu_kb(self) -> list[list[str]]:
         on = self.s["schedule_on"] and not self.s.get("paused_reason")
-        return [["⏸ Пауза" if on else "🟢 Активувати"]] + MENU
+        return [["⏸ Пауза" if on else "🟢 Активувати"]] + MENU + [[FREEDOM_OFF if self.s.get("autopilot") else FREEDOM_ON]]
 
     def menu_on(self) -> None:
         self.s["schedule_on"], self.s["paused_reason"], self.s["fail_streak"] = True, None, 0
         self.say("🟢 Активовано: щодня 4 пости за планом + 1 на гарячу тему, публікація тільки після вашої кнопки"
                  + (" (або сама, бо увімкнено автопілот)." if self.s.get("autopilot") else "."), keyboard=self.menu_kb())
+
+    def menu_freedom_on(self) -> None:
+        self.s["autopilot"] = True
+        self.s["schedule_on"], self.s["paused_reason"] = True, None
+        n = 0
+        for x in self.slots():
+            if x["status"] == "sent" and x.get("draft"):
+                x["status"], x["auto"] = "approved", True
+                n += 1
+        self.say("🚀 Повна свобода увімкнена. Я сам планую, пишу і публікую в Threads щодня без ваших погоджень: "
+                 "4 пости за планом + тренд дня, відповідаю на прості коментарі.\n\n"
+                 "Перед кожною публікацією перевіряю: правила, заборонені теми (війна, ТЦК, політика, релігія, трагедії), "
+                 "що нікого не ображаю, і сьогоднішню повістку Києва. У дні масованих атак чи жалоби сам нічого не публікую.\n\n"
+                 "Про кожну публікацію напишу. Зупинити: «🛑 Стоп свободи»."
+                 + (f"\n\nЧернетки, що чекали на вас ({n}), теж вийдуть у свій час." if n else ""), keyboard=self.menu_kb())
+
+    def menu_freedom_off(self) -> None:
+        self.s["autopilot"] = False
+        n = 0
+        for x in self.slots():
+            if x["status"] == "approved" and x.get("auto"):
+                x["status"], x["auto"] = "sent", False
+                n += 1
+        self.say("🛑 Свободу зупинено. Далі публікую тільки після вашого «✅ Опублікувати»."
+                 + (f" {n} заплановані мною пости знову чекають вашого рішення в «📅 План на сьогодні»." if n else ""),
+                 keyboard=self.menu_kb())
 
     def menu_off(self) -> None:
         self.s["schedule_on"] = False
@@ -517,6 +552,8 @@ class Bot:
             lines.append("Бот на паузі: натисніть 🟢 Активувати." if self.s.get("paused_reason") or not self.s["schedule_on"] else "")
         if self.quiet():
             lines.append("🤫 Сьогодні тиша.")
+        if self.s.get("autopilot"):
+            lines.append("🚀 Повна свобода: публікую сам, після перевірки безпеки.")
         if not sl:
             lines.append("Постів на сьогодні ще немає. План складається з 6:00 за Києвом, о 10:00 надішлю його на схвалення.")
         icons = {"approved": "✅", "published": "🟢", "sent": "🕓", "new": "✍️", "skipped": "⏭",
@@ -1195,6 +1232,9 @@ class Bot:
             return False
         if "без картинки" in (sl.get("image_rule") or ""):
             return False
+        last = self.s.get("last_image_day")
+        if last and (self.now.date() - date.fromisoformat(last)).days < IMAGE_EVERY_DAYS:
+            return False  # owner: pictures very rarely
         day = self.s["days"].get(sl.get("day") or self.today_key(), {}).get("slots", [])
         if sum(1 for x in day if (x.get("draft") or {}).get("image")) >= MAX_AUTO_IMAGES_PER_DAY:
             return False
@@ -1219,6 +1259,7 @@ class Bot:
             d["image_error"] = net.scrub(str(e))[:200]
             return
         d["image"] = {"provider": res["provider"], "url": "", "idea": ip["idea"], "mode": ip["mode"]}
+        self.s["last_image_day"] = sl.get("day") or self.today_key()
         d["image_source"] = ip.get("source")
         if ip.get("explain"):
             d["image_auto"] = "виправлено: " + ip["explain"]
@@ -1233,9 +1274,11 @@ class Bot:
         else:
             ip = writer.image_prompt(self.gm, text, topic=topic, hint=hint)
         if ip["mode"] == "meme":
-            shots = [self.images.generate(p, log=log, character=True, cast=ip.get("cast")) for p in ip["panels"]]
+            # owner (22.11.2026): pictures only without text, so one clean panel, no captions
+            panels = ip["panels"] if self.s.get("image_text") else ip["panels"][:1]
+            shots = [self.images.generate(p, log=log, character=True, cast=ip.get("cast")) for p in panels]
             data = shots[0]["bytes"]
-            if meme.available() and ip["captions"]:
+            if self.s.get("image_text") and meme.available() and ip["captions"]:
                 data = meme.compose(ip["layout"], [x["bytes"] for x in shots], ip["captions"])
             ip["idea"] = f"мем «{ip['format']}»: {ip['idea']}"
             return {"bytes": data, "provider": shots[0]["provider"]}, ip
@@ -1264,6 +1307,10 @@ class Bot:
 
     def send_draft(self, sl: dict, note: str | None = None) -> None:
         d = sl["draft"]
+        if (self.s.get("autopilot") and not sl.get("owner_only") and d.get("fact") != "owner" and note is None
+                and (d.get("score") or 0) < FREEDOM_MIN_SCORE and sl.get("tries", 0) < 3 and sl["kind"] not in ("now", "sell-now")):
+            sl["draft"], sl["status"] = None, "new"  # freedom: weak draft, write another one instead of asking the owner
+            return
         sl["v"] = sl.get("v", 0) + 1
         fact = {"ok": "факти ✅", "fixed": "факти виправлено ✅", "unchecked": "факти НЕ перевірено ⚠️",
                 "nosearch": "факти перевірено без пошуку ⚠️", "owner": "ваш текст"}.get(d.get("fact"), "")
@@ -1282,9 +1329,11 @@ class Bot:
                    [("🔁 Інший текст", f"re|{ref}"), ("⏭ Пропустити", f"sk|{ref}")],
                    [("🎨 Інша картинка", f"im|{ref}"), ("🗑 Прибрати картинку", f"ni|{ref}")] if img
                    else [("🎨 Додати картинку", f"im|{ref}")]]
-        auto = (self.s.get("autopilot") and (d.get("score") or 0) >= 8 and d.get("fact") in ("ok", "fixed", "nosearch", "owner"))
+        auto = bool(self.s.get("autopilot") and not sl.get("owner_only") and ((d.get("score") or 0) >= FREEDOM_MIN_SCORE or d.get("fact") == "owner")
+                    and d.get("fact") in ("ok", "fixed", "nosearch", "owner"))
         if auto:
-            head = f"🤖 Автопілот: вийде о {when} сам. Не так? «Не публікувати» або «Обговорити».\n" + head
+            head = f"🚀 Повна свобода: вийде о {when} сам (перед публікацією ще перевірю безпеку). Не так? «Не публікувати» або «Обговорити».\n" + head
+            sl["auto"] = True
             buttons[0] = [("💬 Обговорити", f"ds|{ref}"), ("⏭ Не публікувати", f"sk|{ref}")]
         if img and d.get("image_auto"):
             head += f"\n🎨 Бот вирішив, що тут потрібна картинка: {d['image_auto']}"
@@ -1323,7 +1372,31 @@ class Bot:
                 self.publish(sl)
                 return  # one post per run
 
+    def safe_to_autopost(self, sl: dict) -> tuple[bool, str]:
+        """Freedom mode: last check right before posting, with today's Kyiv and Ukraine headlines."""
+        headlines: list[str] = []
+        try:
+            headlines = [n["title"] for n in trends.fetch_news(per_source=6, log=log)][:60]
+        except Exception as e:
+            log("news for safety failed:", e)
+        grim = writer.somber_day(headlines)
+        if grim:
+            return False, f"сьогодні важкий день у новинах («{grim}»), без вас нічого не публікую"
+        if not self.gm:
+            return False, "немає моделі для перевірки"
+        return writer.safety_check(self.gm, sl["draft"]["text"], headlines)
+
     def publish(self, sl: dict) -> None:
+        if sl.get("auto") and not self.s.get("autopilot"):
+            sl["status"], sl["auto"] = "sent", False  # freedom was stopped: back to the owner
+            return
+        if sl.get("auto"):
+            ok, why = self.safe_to_autopost(sl)
+            if not ok:
+                sl["status"], sl["auto"], sl["owner_only"] = "sent", False, True
+                self.say(f"🛡 Не опублікував сам пост на {hhmm(sl['at'])}: {why}. Вирішіть самі:")
+                self.send_draft(sl, note="🛡 Чекає вашого рішення")
+                return
         text = sl["draft"]["text"]
         sl["status"] = "publishing"
         self.persist()  # the slot is taken BEFORE publishing: never post twice

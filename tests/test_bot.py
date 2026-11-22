@@ -7,7 +7,7 @@ from unittest import mock
 
 from bot import crypto, net, state as st, writer
 from bot.gemini import parse_json, rank_models
-from bot.main import Bot
+from bot.main import FREEDOM_OFF, FREEDOM_ON, Bot
 from bot.schedule import TZ, make_slots
 
 
@@ -354,6 +354,40 @@ class TrendPlanTests(unittest.TestCase):
         t._post = post
         self.assertEqual(t._container("Дрова", media_type="TEXT", text="x"), "c1")
         self.assertEqual(len(calls), 2)
+
+
+class FreedomTests(unittest.TestCase):
+    def setup_bot(self):
+        b = make_bot(kyiv(7))
+        b.s["schedule_on"] = True
+        with mock.patch("bot.writer.write_post", return_value={"text": GOOD, "rubric": "x", "score": 8, "fact": "ok", "fact_note": None}):
+            b.tick()
+        return b
+
+    def test_freedom_on_off(self):
+        b = self.setup_bot()
+        b.menu_freedom_on()
+        self.assertTrue(all(x["status"] == "approved" for x in b.slots() if x.get("draft")))
+        self.assertIn([FREEDOM_OFF], b.menu_kb())
+        b.menu_freedom_off()
+        self.assertTrue(all(x["status"] == "sent" for x in b.slots() if x.get("draft")))
+        self.assertIn([FREEDOM_ON], b.menu_kb())
+
+    def test_freedom_publish_checks_safety(self):
+        b = self.setup_bot()
+        b.menu_freedom_on()
+        sl = b.slots()[0]
+        b.now = kyiv(11, 20)
+        with mock.patch("bot.trends.fetch_news", return_value=[{"title": "Масована атака на Київ вночі"}]):
+            b.publish(sl)
+        self.assertEqual(b.th.published, [])
+        self.assertEqual(sl["status"], "sent")
+        self.assertTrue(sl["owner_only"])
+        sl2 = b.slots()[1]
+        with mock.patch("bot.trends.fetch_news", return_value=[{"title": "У Києві відкрили ковзанку"}]), \
+             mock.patch("bot.writer.safety_check", return_value=(True, "")):
+            b.publish(sl2)
+        self.assertEqual(len(b.th.published), 1)
 
 
 class ImageTests(unittest.TestCase):

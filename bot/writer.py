@@ -390,6 +390,48 @@ PROOFREAD = """Ти коректор і літредактор українсь�
 Відповідь тільки JSON: {"text": "виправлений текст", "fixes": ["що виправив"]}"""
 
 
+SAFETY = """Ти фінальна перевірка безпеки перед АВТОМАТИЧНОЮ публікацією поста київської компанії дров у Threads, без людини.
+Пост НЕ МОЖНА публікувати (ok=false), якщо:
+- є війна, фронт, обстріли, тривоги, зброя, військові, ТЦК, мобілізація, полонені, окупація, політика, політики, вибори,
+  влада, мер, КМДА, релігія, мова як конфлікт, національності, трагедії, смерть, хвороби;
+- є образа, приниження чи висміювання людей або груп (віку, статі, регіонів, професій, бідності), мат, вульгарність;
+- є тригер, який може розлютити людей (сварка заради сварки, знецінення проблем, жарт про відключення світла в день масованої атаки);
+- є вигадані факти, ціни, акції, обіцянки, яких компанія не давала; згадка конкурентів;
+- сьогоднішня повістка (заголовки нижче) про масовану атаку, жертви, день жалоби: тоді будь-який гумор недоречний, ok=false;
+- текст має граматичні помилки або незрозумілий.
+Якщо все гаразд, ok=true. Сумніваєшся = false.
+Відповідь тільки JSON: {"ok": true/false, "why": "коротко українською"}"""
+
+
+def safety_check(gm: Gemini, text: str, headlines: list[str]) -> tuple[bool, str]:
+    try:
+        banned = load("kyiv.json").get("banned_topics", [])
+    except (OSError, ValueError):
+        banned = []
+    prompt = (f"Заборонені теми бренду: {json.dumps(banned, ensure_ascii=False)}\n"
+              f"Правила власника: {json.dumps(OWNER['rules'], ensure_ascii=False)}\n"
+              f"Заголовки новин сьогодні: {json.dumps(headlines[:25], ensure_ascii=False)}\n\nПост:\n{text}")
+    try:
+        data = parse_json(gm.generate(prompt, system=SAFETY, json_mode=True, temperature=0.1))
+    except Exception as e:
+        return False, f"перевірка не вдалася: {str(e)[:80]}"
+    if not isinstance(data, dict):
+        return False, "перевірка не вдалася"
+    return bool(data.get("ok")), str(data.get("why", ""))[:200]
+
+
+SOMBER_WORDS = ("жалоб", "масован", "загибл", "загинул", "жертв", "ракетн", "удар по києву", "атака на київ", "атаки на київ")
+
+
+def somber_day(headlines: list[str]) -> str:
+    """A crude, model-free guard: on days of mass attacks or mourning the bot does not auto-post jokes."""
+    for h in headlines:
+        low = h.lower()
+        if any(w in low for w in SOMBER_WORDS) and ("київ" in low or "києв" in low or "україн" in low):
+            return h[:150]
+    return ""
+
+
 def proofread(gm: Gemini, text: str) -> tuple[str, list[str]]:
     try:
         data = parse_json(gm.generate(text, system=PROOFREAD, json_mode=True, temperature=0.1))
@@ -614,7 +656,7 @@ IMAGE_JUDGE = """Ти арт-директор Threads-акаунта. Більш
 Картинка потрібна лише коли вона підсилює жарт або ідею: є яскрава візуальна метафора, абсурдна сцена,
 порівняння «до/після», предмет, який смішно намалювати. Для питань, суперечок, зізнань, порад і коротких думок картинка не потрібна.
 Власник дозволив МАКСИМУМ ОДНУ картинку на день на всі пости, і тільки якщо дуже треба. Тому кажи true лише тоді,
-коли без картинки пост явно слабший (мем, візуальний жарт). Якщо сумніваєшся, false.
+коли без картинки пост явно слабший (візуальний жарт, яскрава сцена). Картинка завжди без тексту. Якщо сумніваєшся, false.
 Відповідь тільки JSON: {"image": true/false, "why": "коротко"}"""
 
 
