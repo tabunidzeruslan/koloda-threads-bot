@@ -2,11 +2,20 @@
 // Telegram sends every message/button press here (webhook). The Worker stores it in KV and wakes the
 // GitHub Actions bot at once (workflow_dispatch), so the bot answers in 30-60 s without running all day.
 // The bot then pulls the stored updates from /updates and acknowledges them with /ack.
+// It is also the bot's clock: a Cloudflare cron trigger (every 10 min, 06:00-23:59 Kyiv) starts a normal run, because
+// GitHub's own schedule is best-effort and may not fire on a new repo.
 // Secrets (set by the deploy workflow): WEBHOOK_SECRET, PULL_SECRET, DISPATCH_TOKEN, REPO.
 
 const DEBOUNCE_MS = 40_000;
+const CLOCK_SKIP_MS = 5 * 60_000;   // a run started by a button press in the last 5 min already did the work
 
 export default {
+  async scheduled(event, env, ctx) {
+    const last = Number((await env.Q.get("last_wake")) || 0);
+    if (Date.now() - last < CLOCK_SKIP_MS) return;
+    ctx.waitUntil(wake(env, true));
+  },
+
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     if (url.pathname === "/health") return new Response("ok");

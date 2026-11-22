@@ -2,9 +2,9 @@ name: bot
 
 on:
   schedule:
-    # every 10 min from 06:00 to 23:59 Kyiv (winter); each run also listens to Telegram for 1 minute.
-    # Short scheduled jobs only: GitHub Actions is not meant to be an always-on server.
-    - cron: "*/10 4-21 * * *"
+    # The main clock is the Cloudflare Worker cron (every 10 min, 06:00-23:59 Kyiv, bot/relay.py CRON):
+    # GitHub's schedule is best-effort. This hourly run is only a backup. Short jobs only, never always-on.
+    - cron: "17 4-21 * * *"
   workflow_dispatch:
     inputs:
       task:

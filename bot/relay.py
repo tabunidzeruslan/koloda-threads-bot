@@ -9,6 +9,7 @@ import json
 from . import net
 
 NAME = "koloda-tg"
+CRON = "*/10 4-21 * * *"  # UTC, same window as bot.yml
 API = "https://api.cloudflare.com/client/v4/accounts/{acc}"
 
 
@@ -57,6 +58,11 @@ def deploy(acc: str, token: str, *, tg_token: str, dispatch_token: str, repo: st
     net.request_raw("PUT", base + f"/workers/scripts/{NAME}", parts, f"multipart/form-data; boundary={b}",
                     timeout=60, headers=_h(token))
     net.request("POST", base + f"/workers/scripts/{NAME}/subdomain", json_body={"enabled": True}, headers=_h(token))
+    try:  # the Worker is the bot's clock (GitHub's schedule is best-effort)
+        net.request("PUT", base + f"/workers/scripts/{NAME}/schedules", json_body=[{"cron": CRON}], headers=_h(token))
+        log("worker clock:", CRON)
+    except net.NetError as e:
+        log("worker clock failed:", e)
     u = f"https://{NAME}.{sub}.workers.dev"
     log("worker deployed:", u)
     return u
