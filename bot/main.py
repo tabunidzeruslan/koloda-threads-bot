@@ -73,7 +73,7 @@ COMMANDS = [("menu", "Меню"), ("status", "План на сьогодні"), 
 AWAIT_MINUTES = 20
 LISTEN_SECONDS = 60  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
 MAX_GEN_PER_RUN = 2
-IMAGE_EVERY_DAYS = 3  # at most one automatic picture in 3 days
+IMAGE_EVERY_DAYS = 14  # owner 22.11.2026: pictures almost never, at most one automatic picture in 2 weeks
 OAUTH_APP_ID = os.environ.get("THREADS_APP_ID", "1152144817371787")  # Koloda Threads Bot (public id)
 OAUTH_REDIRECT = "https://koloda.ua/auth/"
 OAUTH_SCOPES = ["threads_basic", "threads_content_publish", "threads_manage_replies", "threads_read_replies",
@@ -210,20 +210,23 @@ class Bot:
 
     def say(self, text: str, buttons=None, keyboard=None, important: bool = False, force: bool = False) -> int | None:
         """Answers to the owner's own presses go out at once. Messages the bot starts itself respect the owner's rules
-        (22.11.2026): only 10:00-18:00 Kyiv, and in freedom mode only important ones (a doubtful topic, a stop)."""
+        (22.11.2026): ordinary ones go out without sound, important ones with sound only 10:00-18:00 Kyiv,
+        and in freedom mode only important ones at all (a doubtful topic, a stop)."""
         self.summary.append(text)
+        silent = False
         if not force and not getattr(self, "_reactive", 0):
             if self.s.get("autopilot") and not important:
                 log("тихо (свобода):", text[:100])
                 return None
-            if not self.in_talk_hours():
-                self.s.setdefault("outbox", []).append({"text": text[:4000], "buttons": buttons})
+            if important and not self.in_talk_hours():
+                self.s.setdefault("outbox", []).append({"text": text[:4000], "buttons": buttons, "important": True})
                 self.s["outbox"] = self.s["outbox"][-15:]
                 log("відкладено до 10:00:", text[:100])
                 return None
+            silent = not important
         if self.tg and self.owner:
             try:
-                return self.tg.send(self.owner, text, buttons, keyboard=keyboard)
+                return self.tg.send(self.owner, text, buttons, keyboard=keyboard, silent=silent)
             except net.NetError as e:
                 log("telegram send failed:", e)
         return None
@@ -234,7 +237,7 @@ class Bot:
         box, self.s["outbox"] = self.s["outbox"], []
         for m in box:
             try:
-                self.tg.send(self.owner, m["text"], m.get("buttons"))
+                self.tg.send(self.owner, m["text"], m.get("buttons"), silent=not m.get("important"))
             except net.NetError as e:
                 log("outbox send failed:", e)
 
@@ -1051,6 +1054,8 @@ class Bot:
     def ensure_menu(self) -> None:
         if not self.tg or not self.owner or self.s.get("menu_v") == MENU_VERSION:
             return
+        if not getattr(self, "_reactive", 0) and not self.in_talk_hours():
+            return  # a new menu waits for the day or for the owner's next message: no pings at night
         try:
             self.tg.set_commands(COMMANDS)
         except net.NetError as e:
@@ -1346,7 +1351,8 @@ class Bot:
     def should_illustrate(self, sl: dict) -> bool:
         if sl.get("want_image"):
             return True
-        if not self.images or not self.gm or sl["kind"] == "sell" or sl.get("sell") or not self.s.get("auto_images", True):
+        if not self.images or not self.gm or sl["kind"] != "hype" or not self.s.get("auto_images", True):
+            return False  # owner 22.11.2026: pictures only in the rarest cases, only for a trend post
             return False
         if "без картинки" in (sl.get("image_rule") or ""):
             return False
@@ -1460,7 +1466,8 @@ class Bot:
             head += f"\n(картинка не вийшла: {d['image_error'][:120]})"
         msg_id = None
         important = bool(note and note.startswith("🛡"))
-        allowed = getattr(self, "_reactive", 0) or ((important or not self.s.get("autopilot")) and self.in_talk_hours())
+        reactive = bool(getattr(self, "_reactive", 0))
+        allowed = reactive or (important and self.in_talk_hours()) or (not important and not self.s.get("autopilot"))
         if auto and not getattr(self, "_reactive", 0):
             sl["msg_id"], sl["status"] = None, "approved"  # freedom: plan silently, the owner sees it in «План»
             return
@@ -1468,7 +1475,8 @@ class Bot:
             photo = getattr(self, "_image_bytes", None) or img.get("file_id")
             self._image_bytes = None
             try:
-                msg_id, img["file_id"] = self.tg.send_photo(self.owner, photo, f"{head}\n\n{d['text']}", buttons)
+                msg_id, img["file_id"] = self.tg.send_photo(self.owner, photo, f"{head}\n\n{d['text']}", buttons,
+                                                                silent=not reactive and not important)
                 self.summary.append(f"[картинка] {head}\n\n{d['text']}")
             except Exception as e:
                 log("send_photo failed:", e)
@@ -1763,7 +1771,7 @@ class Bot:
                 prompt = writer.render_prompt("The man stands next to a neat stacked cubic meter of firewood "
                                               "and proudly measures it with an orange tape measure.")
                 res = self.images.generate(prompt, log=log)
-                if self.tg and self.owner:
+                if self.tg and self.owner and getattr(self, "_reactive", 0):  # only when the owner asked for the check
                     self.tg.send_photo(self.owner, res["bytes"], f"Пробна картинка: Іванович ({res['provider']})")
                 return f"{res['provider']}, {len(res['bytes']) // 1024} КБ"
             out.append(f"ℹ️ Генератори картинок: {', '.join(self.images.providers())}")

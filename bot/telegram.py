@@ -39,7 +39,7 @@ class Telegram:
         self.call("setMyCommands", commands=[{"command": c, "description": d} for c, d in commands])
 
     def send(self, chat_id: int, text: str, buttons: list[list[tuple[str, str]]] | None = None,
-             keyboard: list[list[str]] | None = None) -> int:
+             keyboard: list[list[str]] | None = None, silent: bool = False) -> int:
         markup = None
         if buttons:
             markup = {"inline_keyboard": [[{"text": t, "callback_data": d} for t, d in row] for row in buttons]}
@@ -47,16 +47,18 @@ class Telegram:
             markup = {"keyboard": [[{"text": t} for t in row] for row in keyboard], "resize_keyboard": True,
                       "is_persistent": True}
         res = self.call("sendMessage", chat_id=chat_id, text=text[:4000],
-                        reply_markup=markup, disable_web_page_preview=True)
+                        reply_markup=markup, disable_web_page_preview=True, disable_notification=silent or None)
         return res["message_id"]
 
     def send_photo(self, chat_id: int, photo: bytes | str, caption: str,
-                   buttons: list[list[tuple[str, str]]] | None = None) -> tuple[int, str]:
+                   buttons: list[list[tuple[str, str]]] | None = None, silent: bool = False) -> tuple[int, str]:
         """photo: raw bytes or an existing Telegram file_id. Returns (message_id, file_id)."""
         markup = None
         if buttons:
             markup = json.dumps({"inline_keyboard": [[{"text": t, "callback_data": d} for t, d in row] for row in buttons]})
         fields = {"chat_id": chat_id, "caption": caption[:1024], "reply_markup": markup}
+        if silent:
+            fields["disable_notification"] = "true"
         if isinstance(photo, str):
             fields["photo"] = photo
             body, ctype = net.multipart(fields, {})

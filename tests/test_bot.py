@@ -22,10 +22,16 @@ class FakeTG:
     def set_commands(self, commands):
         self.commands = commands
 
-    def send(self, chat, text, buttons=None, keyboard=None):
+    def send(self, chat, text, buttons=None, keyboard=None, silent=False):
         self.n += 1
         self.sent.append((text, buttons))
+        self.silent = getattr(self, "silent", []) + [silent]
         return self.n
+
+    def send_photo(self, chat, photo, caption, buttons=None, silent=False):
+        self.n += 1
+        self.sent.append(("[photo] " + caption, buttons))
+        return self.n, "file1"
 
     def edit(self, chat, mid, text):
         self.edits.append((mid, text))
@@ -402,13 +408,16 @@ class QuietTests(unittest.TestCase):
         b = make_bot(kyiv(8))
         b.talk_hours = (10, 18)
         b.say("план")
-        self.assertEqual(b.tg.sent, [])
-        self.assertEqual(len(b.s["outbox"]), 1)
+        self.assertEqual(b.tg.silent, [True])  # ordinary message: without sound
+        b.say("важливе вночі", important=True)
+        self.assertEqual(len(b.tg.sent), 1)
+        self.assertEqual(len(b.s["outbox"]), 1)  # important waits for 10:00
         b.owner_turn(b.say, "відповідь на кнопку")
-        self.assertEqual(len(b.tg.sent), 1)  # answers to the owner go out at once
+        self.assertEqual(len(b.tg.sent), 2)  # answers to the owner go out at once
         b.now = kyiv(10, 5)
         b.flush_outbox()
-        self.assertEqual(len(b.tg.sent), 2)
+        self.assertEqual(b.tg.silent[-1], False)  # important: with sound, in working hours
+        b.tg.sent = b.tg.sent[1:]
         b.s["autopilot"] = True
         b.say("опубліковано")
         self.assertEqual(len(b.tg.sent), 2)  # freedom: no trifles
@@ -431,6 +440,8 @@ class ImageTests(unittest.TestCase):
         with mock.patch("bot.writer.write_post", side_effect=lambda *a, **k: dict(post)), \
              mock.patch("bot.writer.needs_image", return_value=(True, "абсурдна сцена")), \
              mock.patch("bot.writer.image_prompt", return_value={"mode": "scene", "prompt": "p", "idea": "i"}):
+            b.plan_today()
+            b.slots()[1]["kind"] = "hype"  # pictures only for a trend post
             b.tick()
         with_img = [x for x in b.slots() if (x.get("draft") or {}).get("image")]
         self.assertEqual(len(with_img), 1)
@@ -620,3 +631,21 @@ class LibraryTests(unittest.TestCase):
         b.now = kyiv(11, 20)
         b.publish(sl)
         self.assertEqual(sl["status"], "published")
+
+
+class SilentFreedomTests(unittest.TestCase):
+    def test_freedom_night_sends_nothing(self):
+        from bot import main as m
+        b = make_bot(kyiv(3))
+        b.library = m.LIBRARY
+        b.talk_hours = (10, 18)
+        b.s["schedule_on"], b.s["autopilot"] = True, True
+        b.images = mock.Mock(can_host=False, providers=lambda: ["x"],
+                             generate=lambda *a, **k: {"bytes": b"img", "provider": "x"})
+        b.say(b.selftest())  # a manual check from GitHub, not from the owner
+        for h in (3, 6, 7, 8, 9):
+            b.now = kyiv(h)
+            with mock.patch("bot.writer.write_post", return_value=None):
+                b.tick()
+        self.assertEqual(b.tg.sent, [])
+        self.assertTrue(any((x.get("draft") or {}).get("lib") for x in b.slots()))
