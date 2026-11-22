@@ -369,10 +369,10 @@ class FreedomTests(unittest.TestCase):
         b = self.setup_bot()
         b.menu_freedom_on()
         self.assertTrue(all(x["status"] == "approved" for x in b.slots() if x.get("draft")))
-        self.assertIn([FREEDOM_OFF], b.menu_kb())
+        self.assertIn(FREEDOM_OFF, b.menu_kb()[1])
         b.menu_freedom_off()
         self.assertTrue(all(x["status"] == "sent" for x in b.slots() if x.get("draft")))
-        self.assertIn([FREEDOM_ON], b.menu_kb())
+        self.assertIn(FREEDOM_ON, b.menu_kb()[1])
 
     def test_freedom_publish_checks_safety(self):
         b = self.setup_bot()
@@ -463,10 +463,10 @@ class ActivateButtonTest(unittest.TestCase):
         ups = [{"update_id": 1, "message": {"message_id": 10, "chat": {"id": 1, "type": "private"}, "text": "🟢 Активувати"}}]
         b = make_bot(now, ups)
         b.s["schedule_on"] = False
-        self.assertEqual(b.menu_kb()[0], ["🟢 Активувати"])
+        self.assertEqual(b.menu_kb()[1][0], "Активувати")
         b.handle_updates()
         self.assertTrue(b.s["schedule_on"])
-        self.assertEqual(b.menu_kb()[0], ["⏸ Пауза"])
+        self.assertEqual(b.menu_kb()[1][0], "Пауза")
         b.on_message({"message_id": 11, "chat": {"id": 1, "type": "private"}, "text": "⏸ Пауза"})
         self.assertFalse(b.s["schedule_on"])
 

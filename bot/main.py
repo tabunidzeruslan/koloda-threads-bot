@@ -38,12 +38,12 @@ HELP = ("Усе є в меню кнопками внизу чату:\n"
         "Щоб виправити текст, дайте відповідь (Reply) на чернетку своїм текстом.")
 # owner asked (22.11.2026) for a minimal menu; the other actions still work by plain words (статистика, хайп, чат…)
 MENU = [["План на сьогодні"]]
-MENU_VERSION = 6
+MENU_VERSION = 7
 CHAT_IDLE_MINUTES = 30
 MENU_ACTIONS = {"План на сьогодні": "menu_plan", "📅 План на сьогодні": "menu_plan", "📅 План": "menu_plan", "📊 Статистика": "menu_stats", "✍️ Пост зараз": "menu_post",
                 "🔥 Хайп": "menu_hype", "🎨 Картинка": "menu_draw", "💬 Коментарі": "menu_comments",
                 "⚙️ Налаштування": "menu_settings", "❓ Допомога": "menu_help", "🧠 Чат з ботом": "menu_chat",
-                "🟢 Активувати": "menu_on", "⏸ Пауза": "menu_off"}
+                "🟢 Активувати": "menu_on", "⏸ Пауза": "menu_off", "Активувати": "menu_on", "Пауза": "menu_off"}
 WORD_ACTIONS = {  # plain words, Russian or Ukrainian, without the emoji
     "план": "menu_plan", "план на сьогодні": "menu_plan", "план на сегодня": "menu_plan", "статистика": "menu_stats", "стата": "menu_stats", "пост": "menu_post", "пост зараз": "menu_post",
     "пост сейчас": "menu_post", "хайп": "menu_hype", "тренды": "menu_hype", "тренди": "menu_hype", "картинка": "menu_draw",
@@ -545,7 +545,7 @@ class Bot:
     # ---------- menu
     def menu_kb(self) -> list[list[str]]:
         on = self.s["schedule_on"] and not self.s.get("paused_reason")
-        return [["⏸ Пауза" if on else "🟢 Активувати"]] + MENU + [[FREEDOM_OFF if self.s.get("autopilot") else FREEDOM_ON]]
+        return MENU + [["Пауза" if on else "Активувати", FREEDOM_OFF if self.s.get("autopilot") else FREEDOM_ON]]
 
     def menu_on(self) -> None:
         self.s["schedule_on"], self.s["paused_reason"], self.s["fail_streak"] = True, None, 0
@@ -1005,7 +1005,7 @@ class Bot:
             self.tg.set_commands(COMMANDS)
         except net.NetError as e:
             log("setMyCommands failed:", e)
-        self.say("Оновив меню 👇", keyboard=self.menu_kb(), force=True)
+        self.say("Меню внизу: План на сьогодні, Активувати або Пауза, Повна свобода.", keyboard=self.menu_kb(), force=True)
         self.s["menu_v"] = MENU_VERSION
 
     def listen(self, seconds: int) -> None:
