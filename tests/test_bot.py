@@ -521,6 +521,7 @@ class LearnTests(unittest.TestCase):
     def test_metrics_and_weekly_learning(self):
         b = make_bot(kyiv(11))
         b.th.post_stats = mock.Mock(return_value={"views": 200, "likes": 5, "replies": 4, "reposts": 1, "quotes": 0})
+        b.th.followers = mock.Mock(return_value=150)
         b.s["posts"] = [{"id": str(i), "text": f"пост {i}?", "rubric": "Питання", "at": kyiv(10, d=18).isoformat()}
                         for i in range(6)] + [{"id": "new", "text": "свіжий", "at": kyiv(9).isoformat()}]
         b.collect_metrics()
@@ -530,12 +531,21 @@ class LearnTests(unittest.TestCase):
         b.gm.generate = mock.Mock(return_value='{"learnings": ["питання в першому рядку дають відповіді"], '
                                                '"rubric_boost": {"Питання": 5}, "best": [1], "summary": "Питання працюють."}')
         b.learn()
+        self.assertEqual(b.s["followers"][-1]["n"], 150)
+        self.assertIn("10000", b.gm.generate.call_args[0][0])  # the goal goes to the analyst
+        self.assertEqual(b.s["learn_log"][-1]["summary"], "Питання працюють.")
         self.assertEqual(b.s["rubric_boost"], {"Питання": 2.0})
         self.assertEqual(b.s["best_examples"], ["пост 1?"])
         self.assertEqual(writer.LEARNED["learnings"], ["питання в першому рядку дають відповіді"])
         calls = b.gm.generate.call_count
         b.learn()
-        self.assertEqual(b.gm.generate.call_count, calls)  # weekly, not every run
+        self.assertEqual(b.gm.generate.call_count, calls)  # once a day, not every run
+        b.now = kyiv(11, d=23)
+        b.learn()
+        self.assertGreater(b.gm.generate.call_count, calls)  # next day: new analysis
+        self.assertIn("питання в першому рядку", b.gm.generate.call_args[0][0])  # remembers its own conclusions
+        self.assertIsNotNone(writer.check("Нас уже 500 підписників, допоможіть дійти до 10 000!", sell=False,
+                                          today=date(2026, 11, 22), recent=[], examples=[]))
 
     def test_no_learning_with_few_posts(self):
         b = make_bot(kyiv(11))

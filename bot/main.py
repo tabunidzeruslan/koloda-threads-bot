@@ -73,6 +73,7 @@ COMMANDS = [("menu", "Меню"), ("status", "План на сьогодні"), 
 AWAIT_MINUTES = 20
 LISTEN_SECONDS = 60  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
 MAX_GEN_PER_RUN = 2
+GOAL_FOLLOWERS = 10_000  # owner 22.11.2026: the agent's own target, never mentioned in posts
 IMAGE_EVERY_DAYS = 14  # owner 22.11.2026: pictures almost never, at most one automatic picture in 2 weeks
 OAUTH_APP_ID = os.environ.get("THREADS_APP_ID", "1152144817371787")  # Koloda Threads Bot (public id)
 OAUTH_REDIRECT = "https://koloda.ua/auth/"
@@ -1292,6 +1293,8 @@ class Bot:
         pool = [x for x in self.library if x["slot"] == sl["name"] and x["id"] not in used
                 and (x.get("season", "any") == "any" or (x["season"] == "cold") == cold)]
         self.rnd.shuffle(pool)
+        boost = self.s.get("rubric_boost") or {}
+        pool.sort(key=lambda x: -float(boost.get(x.get("rubric", ""), 1.0)))  # what worked goes first
         for x in pool:
             if writer.check(x["text"], sell=sl["kind"] == "sell", today=self.now.date(), recent=recent, examples=[]):
                 continue
@@ -1618,17 +1621,34 @@ class Bot:
                 log("metrics", p.get("id"), net.scrub(str(e))[:120])
         if done:
             self.summary.append(f"metrics: {done}")
+        try:
+            n = self.th.followers()
+            fl = [x for x in self.s.get("followers", []) if x["d"] != self.today_key()]
+            self.s["followers"] = (fl + [{"d": self.today_key(), "n": n}])[-120:]
+        except Exception as e:
+            log("followers", net.scrub(str(e))[:120])
+
+    def goal_line(self) -> str:
+        fl = self.s.get("followers") or []
+        if not fl:
+            return f"Мета: {GOAL_FOLLOWERS} підписників у Threads."
+        now, week = fl[-1]["n"], fl[-8]["n"] if len(fl) >= 8 else fl[0]["n"]
+        return (f"Мета: {GOAL_FOLLOWERS} підписників у Threads. Зараз {now}, за останні {min(7, len(fl) - 1)} днів "
+                f"{now - week:+d}.")
 
     def learn(self, force: bool = False) -> None:
-        """Weekly: find what works in OUR account and feed it back into writing and rubric choice."""
+        """Daily: what worked and what did not in OUR account, toward the follower goal; conclusions are kept
+        and fed back into writing, rubric choice and library picks."""
         last = self.s.get("learned_at", "")
-        if not self.gm or (not force and last and since_minutes(last, self.now) < 6 * 1440):
+        if not self.gm or (not force and (last[:10] == self.today_key() or self.now.hour < 8)):
             return
         posts = [p for p in self.s.get("posts", []) if p.get("metrics")][-30:]
-        if len(posts) < 5:
+        if len(posts) < 3:
             return
+        prev = self.s.get("learnings") or []
+        context = self.goal_line() + (" Мої минулі висновки: " + json.dumps(prev, ensure_ascii=False) if prev else "")
         try:
-            res = writer.analyze_posts(self.gm, posts)
+            res = writer.analyze_posts(self.gm, posts, context)
         except Exception as e:
             log("learn", net.scrub(str(e))[:150])
             return
@@ -1651,7 +1671,11 @@ class Bot:
         self.s["learnings"], self.s["rubric_boost"], self.s["best_examples"] = learnings, boost, best
         writer.set_learned(learnings, best, boost)
         if res.get("summary"):
-            self.say("Що я зрозумів за тиждень:\n" + str(res["summary"])[:600])
+            log_ = self.s.setdefault("learn_log", [])
+            log_.append({"d": self.today_key(), "summary": str(res["summary"])[:600]})
+            self.s["learn_log"] = log_[-30:]
+            if self.now.weekday() == 0:  # once a week, silently, outside freedom mode
+                self.say("Що я зрозумів за тиждень:\n" + str(res["summary"])[:600])
 
     # ---------- hype
     def make_hype(self, topic: str, *, url: str, images: list | None = None, source: str = "",
@@ -1721,6 +1745,10 @@ class Bot:
             lines.append(f"Останній пост: {p['at'][:16].replace('T', ' ')} {p.get('permalink') or ''}")
         tok = self.s.get("token") or {}
         lines.append(f"Токен Threads продовжено: {(tok.get('refreshed_at') or 'ще ні')[:10]}")
+        if self.s.get("followers"):
+            lines.append(f"Підписники: {self.s['followers'][-1]['n']} з {GOAL_FOLLOWERS}")
+        if self.s.get("learn_log"):
+            lines.append(f"Останній висновок ({self.s['learn_log'][-1]['d']}): {self.s['learn_log'][-1]['summary'][:300]}")
         lines.append(f"Модель Gemini: {self.s.get('gemini_model') or 'ще не вибрана'}")
         return "\n".join(lines)
 

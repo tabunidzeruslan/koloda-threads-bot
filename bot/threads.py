@@ -51,6 +51,10 @@ class Threads:
                          since=since, until=until).get("data", [])
         return {m["name"]: metric_value(m) for m in data}
 
+    def followers(self) -> int:
+        data = self._get("me/threads_insights", metric="followers_count").get("data", [])
+        return metric_value(data[0]) if data else 0
+
     def post_stats(self, post_id: str) -> dict:
         data = self._get(f"{post_id}/insights", metric="views,likes,replies,reposts,quotes").get("data", [])
         return {m["name"]: metric_value(m) for m in data}

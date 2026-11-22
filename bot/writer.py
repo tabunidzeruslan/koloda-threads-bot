@@ -31,6 +31,9 @@ WARM_WORDS = ["спек", "пляж", "засмаг", "кондиціонер", 
 COLD_WORDS = ["мороз", "снігопад", "заметіл", "опалювальний сезон", "кожух"]
 
 
+GOAL_TALK = re.compile(r"10\s?000|10\s?тис|десять тисяч|\d+\s*підписник")
+
+
 def load(name: str):
     return json.loads((DATA / name).read_text(encoding="utf-8"))
 
@@ -87,6 +90,8 @@ def check(text: str, *, sell: bool, today: date, recent: list[str], examples: li
         return "звернення на «ти»"
     if PRICE.search(t):
         return "ціна"
+    if GOAL_TALK.search(low):
+        return "внутрішня мета (підписники) у пості"
     if not sell and (PHONE.search(t) or "koloda.ua" in low):
         return "контакт у непродаючому пості"
     if today.month in (10, 11, 12, 1, 2, 3) and any(w in low for w in WARM_WORDS):
@@ -164,13 +169,16 @@ performance-analyzer і content-pattern-analyzer, MIT): порівнюй не с
 відповіді і репости важать більше за лайки. Знайди найкращі і найгірші пости і поясни ЧОМУ: тема, рубрика, гачок у першому рядку,
 формат (питання, суперечка, порада, гумор, продаж, тренд), довжина, час, картинка, тег. Шукай повторювані закономірності,
 а не випадковості; при малій кількості постів формулюй обережно («схоже, що…»).
-Поверни конкретні правила для автора на наступний тиждень (до 8), кожне спирається на цифри з даних.
+Аналіз щоденний: враховуй свої минулі висновки, підтверджуй або змінюй їх за новими цифрами.
+Головна мета акаунта: зростання до 10 000 підписників у Threads, тому найважливіше те, що приводить нових людей
+(відповіді, репости, суперечки, трендові пости), а не лайки своїх. Мета внутрішня: НІКОЛИ не пропонуй згадувати її в постах.
+Поверни конкретні правила для автора на найближчі дні (до 8), кожне спирається на цифри з даних.
 Також оціни рубрики: множник 0.5-2.0 (більше 1 = писати частіше), тільки для рубрик, що є в даних.
 Відповідь тільки JSON: {"learnings": ["правило з поясненням"], "rubric_boost": {"рубрика": 1.3}, "best": [індекси найкращих постів, до 3],
 "summary": "2-3 речення українською: що працює, що ні"}"""
 
 
-def analyze_posts(gm: Gemini, posts: list[dict]) -> dict:
+def analyze_posts(gm: Gemini, posts: list[dict], context: str = "") -> dict:
     rows = []
     for i, p in enumerate(posts):
         m = p.get("metrics") or {}
@@ -178,7 +186,8 @@ def analyze_posts(gm: Gemini, posts: list[dict]) -> dict:
                      "hour": p.get("hour"), "weekday": p.get("weekday"), "image": p.get("image"), "tag": p.get("tag"),
                      "question": "?" in (p.get("text") or ""), "len": len(p.get("text") or ""), **m,
                      "score": engagement_score(m)})
-    data = parse_json(gm.generate("Пости з метриками:\n" + json.dumps(rows, ensure_ascii=False), system=ANALYST,
+    data = parse_json(gm.generate((context + "\n" if context else "") + "Пости з метриками:\n"
+                                  + json.dumps(rows, ensure_ascii=False), system=ANALYST,
                                   json_mode=True, temperature=0.2))
     return data if isinstance(data, dict) else {}
 
