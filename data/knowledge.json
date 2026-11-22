@@ -9,7 +9,7 @@
           "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
         },
         {
-          "text": "1 м³ щільної дубової деревини важить ~714 кг при вологості 20% і ~1142 кг при 50%. Різниця — це вода.",
+          "text": "1 м³ щільної дубової деревини важить ~714 кг при вологості 20% і ~1142 кг при 50%. Різниця, це вода.",
           "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
         },
         {
@@ -21,7 +21,7 @@
           "source": "https://en.wikipedia.org/wiki/Robinia_pseudoacacia"
         },
         {
-          "text": "Щільність деревини акації приблизно 730 кг/м³, твердість за Янкою близько 7560 Н — одна з найтвердіших порід.",
+          "text": "Щільність деревини акації приблизно 730 кг/м³, твердість за Янкою близько 7560 Н, одна з найтвердіших порід.",
           "source": "https://en.wikipedia.org/wiki/Robinia_pseudoacacia"
         },
         {
@@ -29,7 +29,7 @@
           "source": "https://en.wikipedia.org/wiki/Fraxinus_excelsior"
         },
         {
-          "text": "Ясен горить жарко й рівно, з малим димом і майже без запаху — добрий вибір для печі та котла.",
+          "text": "Ясен горить жарко й рівно, з малим димом і майже без запаху, добрий вибір для печі та котла.",
           "source": "https://www.husqvarna.com/uk/learn-and-discover/best-fire-burn/"
         },
         {
@@ -86,11 +86,11 @@
           "source": "https://www.epa.gov/burnwise/best-wood-burning-practices"
         },
         {
-          "text": "Повітряно-сухі дрова (15–20% води) дають у середньому ~4 кВт·год/кг, свіжозрубані (50%+) — лише ~2 кВт·год/кг.",
+          "text": "Повітряно-сухі дрова (15–20% води) дають у середньому ~4 кВт·год/кг, свіжозрубані (50%+), лише ~2 кВт·год/кг.",
           "source": "https://lwf.bayern.de/mam/cms04/service/dateien/mb20_scheitholz_2025_rz_web_bf.pdf"
         },
         {
-          "text": "На випаровування 1 кг води з дров витрачається близько 0,68 кВт·год тепла — воно йде в димар, а не в дім.",
+          "text": "На випаровування 1 кг води з дров витрачається близько 0,68 кВт·год тепла, воно йде в димар, а не в дім.",
           "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
         },
         {
@@ -118,7 +118,7 @@
           "source": "https://extension.umd.edu/sites/extension.umd.edu/files/publications/FS-937_2012_Buying_and_Storing_Firewood_Pellets.pdf"
         },
         {
-          "text": "Найнадійніше — вологомір: розколіть поліно і вставте щупи у свіжий скол; перевірте кілька полін з різних місць.",
+          "text": "Найнадійніше, вологомір: розколіть поліно і вставте щупи у свіжий скол; перевірте кілька полін з різних місць.",
           "source": "https://extension.unh.edu/node/2484"
         },
         {
@@ -126,7 +126,7 @@
           "source": "https://extension.unh.edu/node/2523"
         },
         {
-          "text": "Брикети можуть мати вологість близько 4%, тоді як свіжі дрова — до 65%.",
+          "text": "Брикети можуть мати вологість близько 4%, тоді як свіжі дрова, до 65%.",
           "source": "https://en.wikipedia.org/wiki/Briquette"
         }
       ]
@@ -135,11 +135,11 @@
       "topic": "Об'єм: складометр, щільний і насипний кубометр",
       "facts": [
         {
-          "text": "Складометр (стер) — 1 м³ складених полін разом із проміжками; щільний кубометр — лише сама деревина без повітря.",
+          "text": "Складометр (стер), 1 м³ складених полін разом із проміжками; щільний кубометр, лише сама деревина без повітря.",
           "source": "https://en.wikipedia.org/wiki/Stere"
         },
         {
-          "text": "Чим коротші поліна, тим щільніше укладання: у складометрі приблизно 0,8 м³ деревини при довжині 50 см, 0,7 — при 33 см, 0,6 — при 25 см.",
+          "text": "Чим коротші поліна, тим щільніше укладання: у складометрі приблизно 0,8 м³ деревини при довжині 50 см, 0,7, при 33 см, 0,6, при 25 см.",
           "source": "https://en.wikipedia.org/wiki/Stere"
         },
         {
@@ -151,7 +151,7 @@
           "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
         },
         {
-          "text": "Насипний кубометр колотих дров містить приблизно 0,45–0,5 м³ щільної деревини — менше, ніж складометр (~0,7).",
+          "text": "Насипний кубометр колотих дров містить приблизно 0,45–0,5 м³ щільної деревини, менше, ніж складометр (~0,7).",
           "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
         },
         {
@@ -159,7 +159,7 @@
           "source": "https://novyny.live/ekonomi/skladenii-chi-shchilnii-kubometr-drov-v-chomu-riznitsia-ta-za-shcho-povinen-zaplatiti-pokupets-338503.html"
         },
         {
-          "text": "Перевірка просто: виміряйте висоту, ширину й довжину штабеля і перемножте — це об'єм у складометрах.",
+          "text": "Перевірка просто: виміряйте висоту, ширину й довжину штабеля і перемножте, це об'єм у складометрах.",
           "source": "https://novyny.live/ekonomi/skladenii-chi-shchilnii-kubometr-drov-v-chomu-riznitsia-ta-za-shcho-povinen-zaplatiti-pokupets-338503.html"
         },
         {
@@ -167,7 +167,7 @@
           "source": "https://mda.maryland.gov/weights_measures/Pages/consumer_tips_firewood.aspx"
         },
         {
-          "text": "«Кузов», «купа», «машина» — не одиниці виміру; надійніше домовлятися про об'єм у складометрах чи кубометрах.",
+          "text": "«Кузов», «купа», «машина», не одиниці виміру; надійніше домовлятися про об'єм у складометрах чи кубометрах.",
           "source": "https://mda.maryland.gov/weights_measures/Pages/consumer_tips_firewood.aspx"
         },
         {
@@ -179,7 +179,7 @@
           "source": "https://extension.umd.edu/sites/extension.umd.edu/files/publications/FS-937_2012_Buying_and_Storing_Firewood_Pellets.pdf"
         },
         {
-          "text": "Корд (США) — штабель 1,2×2,4×1,2 м, близько 3,62 м³; 1 складометр ≈ 0,276 корду.",
+          "text": "Корд (США), штабель 1,2×2,4×1,2 м, близько 3,62 м³; 1 складометр ≈ 0,276 корду.",
           "source": "https://en.wikipedia.org/wiki/Cord_(unit)"
         },
         {
@@ -208,7 +208,7 @@
           "source": "https://lwf.bayern.de/mam/cms04/service/dateien/mb20_scheitholz_2025_rz_web_bf.pdf"
         },
         {
-          "text": "Найкраще місце — сонячне й провітрюване: південна чи західна стіна, відкритий двір.",
+          "text": "Найкраще місце, сонячне й провітрюване: південна чи західна стіна, відкритий двір.",
           "source": "https://lwf.bayern.de/mam/cms04/service/dateien/mb20_scheitholz_2025_rz_web_bf.pdf"
         },
         {
@@ -241,7 +241,7 @@
       "topic": "Топка: розпалювання, тяга, креозот, безпека",
       "facts": [
         {
-          "text": "Метод «зверху вниз»: внизу великі поліна, вище — тріска, зверху — папір. Вогонь іде вниз, диму на старті менше.",
+          "text": "Метод «зверху вниз»: внизу великі поліна, вище, тріска, зверху, папір. Вогонь іде вниз, диму на старті менше.",
           "source": "https://woodheat.org/top-down-fever.html"
         },
         {
@@ -249,7 +249,7 @@
           "source": "https://woodheat.org/top-down-fever.html"
         },
         {
-          "text": "Не розпалюйте бензином, гасом чи рідиною для барбекю — лише папір, суха тріска або натуральні розпалювачі.",
+          "text": "Не розпалюйте бензином, гасом чи рідиною для барбекю, лише папір, суха тріска або натуральні розпалювачі.",
           "source": "https://www.epa.gov/burnwise/best-wood-burning-practices"
         },
         {
@@ -297,7 +297,7 @@
           "source": "https://life.pravda.com.ua/society/2022/11/11/251261/"
         },
         {
-          "text": "Дверцята печі тримають зачиненими, окрім закладання дров; попіл — у металеве відро з кришкою надворі.",
+          "text": "Дверцята печі тримають зачиненими, окрім закладання дров; попіл, у металеве відро з кришкою надворі.",
           "source": "https://www.epa.gov/burnwise/best-wood-burning-practices"
         }
       ]
@@ -306,19 +306,19 @@
       "topic": "Пелети та брикети: RUF, Nestro, Pini Kay",
       "facts": [
         {
-          "text": "Пелети — гранули з пресованої тирси діаметром зазвичай 6 мм (буває 8 мм).",
+          "text": "Пелети, гранули з пресованої тирси діаметром зазвичай 6 мм (буває 8 мм).",
           "source": "https://en.wikipedia.org/wiki/Pellet_fuel"
         },
         {
-          "text": "Сама пелета щільніша за воду (понад 1 т/м³) і тоне, а насипна щільність пелет — приблизно 0,6–0,7 т/м³.",
+          "text": "Сама пелета щільніша за воду (понад 1 т/м³) і тоне, а насипна щільність пелет, приблизно 0,6–0,7 т/м³.",
           "source": "https://en.wikipedia.org/wiki/Pellet_fuel"
         },
         {
-          "text": "Енергія пелет — приблизно 4,6 кВт·год/кг (листяні) та 4,9 кВт·год/кг (хвойні); вологість не більше 10%.",
+          "text": "Енергія пелет, приблизно 4,6 кВт·год/кг (листяні) та 4,9 кВт·год/кг (хвойні); вологість не більше 10%.",
           "source": "https://www.eta.co.at/en/products/around-biomass/fuels/"
         },
         {
-          "text": "Стандарт ENplus обмежує зольність: A1 — до 0,7%, A2 — до 1,5%, B — до 3%.",
+          "text": "Стандарт ENplus обмежує зольність: A1, до 0,7%, A2, до 1,5%, B, до 3%.",
           "source": "https://www.mass.gov/doc/comparison-of-wood-pellet-standards-and-certifications-51415/download"
         },
         {
@@ -338,7 +338,7 @@
           "source": "https://en.wikipedia.org/wiki/Briquette"
         },
         {
-          "text": "RUF — прямокутні брикети-«цеглинки», зручні для складання й зберігання.",
+          "text": "RUF, прямокутні брикети-«цеглинки», зручні для складання й зберігання.",
           "source": "https://fakty.com.ua/ua/ukraine/ekonomika/20261118-tsiny-na-palyvni-brykety-v-ukrayini-u-2026-rotsi-vartist-riznyh-vydiv/"
         },
         {
@@ -350,7 +350,7 @@
           "source": "https://lektowoodfuels.co.uk/blogs/news/6-types-of-wood-briquettes"
         },
         {
-          "text": "Nestro — циліндричні брикети високої щільності; підходять для твердопаливних котлів і печей.",
+          "text": "Nestro, циліндричні брикети високої щільності; підходять для твердопаливних котлів і печей.",
           "source": "https://fakty.com.ua/ua/ukraine/ekonomika/20261118-tsiny-na-palyvni-brykety-v-ukrayini-u-2026-rotsi-vartist-riznyh-vydiv/"
         },
         {
@@ -358,7 +358,7 @@
           "source": "https://www.firewood.co.uk/briquettes/briquette-knowledge-base/briquette-comparison/"
         },
         {
-          "text": "Pini Kay — багатогранні брикети (шести- чи восьмигранні) з отвором посередині, що працює як тяга.",
+          "text": "Pini Kay, багатогранні брикети (шести- чи восьмигранні) з отвором посередині, що працює як тяга.",
           "source": "https://www.firewood.co.uk/briquettes/briquette-knowledge-base/briquette-comparison/"
         },
         {
@@ -375,7 +375,7 @@
       "topic": "Камін і мангал: які дрова",
       "facts": [
         {
-          "text": "Для шашлику добрі фруктові дрова: яблуня, вишня, груша, абрикос — довго горять і додають аромату.",
+          "text": "Для шашлику добрі фруктові дрова: яблуня, вишня, груша, абрикос, довго горять і додають аромату.",
           "source": "https://vikna.tv/styl-zhyttya/yizha/yaki-drova-krashhe-dlya-shashlyku"
         },
         {
@@ -387,7 +387,7 @@
           "source": "https://www.charbroil.com/learn/smoking-wood-flavors"
         },
         {
-          "text": "Дуб для копчення дає середню димність — сильнішу за яблуню чи вишню і добре поєднується з фруктовими.",
+          "text": "Дуб для копчення дає середню димність, сильнішу за яблуню чи вишню і добре поєднується з фруктовими.",
           "source": "https://www.charbroil.com/learn/smoking-wood-flavors"
         },
         {
@@ -403,7 +403,7 @@
           "source": "https://vikna.tv/styl-zhyttya/yizha/yaki-drova-krashhe-dlya-shashlyku"
         },
         {
-          "text": "Вишня горить чисто і з м'яким солодким ароматом — підходить і для каміна.",
+          "text": "Вишня горить чисто і з м'яким солодким ароматом, підходить і для каміна.",
           "source": "https://www.husqvarna.com/uk/learn-and-discover/best-fire-burn/"
         },
         {
@@ -419,7 +419,7 @@
           "source": "https://en.wikipedia.org/wiki/Robinia_pseudoacacia"
         },
         {
-          "text": "Відкритий камін має ККД лише ~10–20%, сучасна піч — 80% і більше.",
+          "text": "Відкритий камін має ККД лише ~10–20%, сучасна піч, 80% і більше.",
           "source": "https://extension.psu.edu/heating-with-wood-an-introduction"
         },
         {
@@ -472,7 +472,7 @@
           "source": "https://www.cdc.gov/carbon-monoxide/about/index.html"
         },
         {
-          "text": "Будинку 150 м² у Німеччині потрібно ~9000 кВт·год на рік — це приблизно 5–7 насипних м³ сухих дров.",
+          "text": "Будинку 150 м² у Німеччині потрібно ~9000 кВт·год на рік, це приблизно 5–7 насипних м³ сухих дров.",
           "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
         }
       ]
@@ -485,11 +485,11 @@
           "source": "https://www.ieabioenergy.com/?p=12247"
         },
         {
-          "text": "Здебільшого деревина для енергетики — побічний продукт заготівлі цінніших лісоматеріалів.",
+          "text": "Здебільшого деревина для енергетики, побічний продукт заготівлі цінніших лісоматеріалів.",
           "source": "https://www.ieabioenergy.com/?p=12247"
         },
         {
-          "text": "Ключова умова сталості — відновлення лісів і збереження їхньої здатності поглинати CO₂.",
+          "text": "Ключова умова сталості, відновлення лісів і збереження їхньої здатності поглинати CO₂.",
           "source": "https://www.ieabioenergy.com/?p=12247"
         },
         {
@@ -501,7 +501,7 @@
           "source": "https://en.wikipedia.org/wiki/Briquette"
         },
         {
-          "text": "Брикети й пелети роблять з тирси та стружки — відходів деревообробки.",
+          "text": "Брикети й пелети роблять з тирси та стружки, відходів деревообробки.",
           "source": "https://en.wikipedia.org/wiki/Pellet_fuel"
         },
         {
@@ -534,7 +534,7 @@
       "topic": "Міфи і цікаві факти",
       "facts": [
         {
-          "text": "Міф: хвойні дають більше креозоту. Головна причина креозоту — волога деревина, а не смола.",
+          "text": "Міф: хвойні дають більше креозоту. Головна причина креозоту, волога деревина, а не смола.",
           "source": "https://www.hearth.com/articles/chimneysweep/hosoftwood.htm"
         },
         {
@@ -542,7 +542,7 @@
           "source": "https://www.hearth.com/articles/chimneysweep/hosoftwood.htm"
         },
         {
-          "text": "Різниця «20% води» і «25% вологості» — одне й те саме: перше рахують від маси дров, друге — від сухої деревини.",
+          "text": "Різниця «20% води» і «25% вологості», одне й те саме: перше рахують від маси дров, друге, від сухої деревини.",
           "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
         },
         {
@@ -554,7 +554,7 @@
           "source": "https://en.wikipedia.org/wiki/Cord_(unit)"
         },
         {
-          "text": "Палі під мостом Ріальто у Венеції — з вільхи: під водою вона дуже довговічна.",
+          "text": "Палі під мостом Ріальто у Венеції, з вільхи: під водою вона дуже довговічна.",
           "source": "https://en.wikipedia.org/wiki/Alnus_glutinosa"
         },
         {
@@ -562,7 +562,7 @@
           "source": "https://en.wikipedia.org/wiki/Robinia_pseudoacacia"
         },
         {
-          "text": "Угорщина оголосила акацію «гунгарикумом» — елементом національної спадщини; вона важлива для дров і акацієвого меду.",
+          "text": "Угорщина оголосила акацію «гунгарикумом», елементом національної спадщини; вона важлива для дров і акацієвого меду.",
           "source": "https://en.wikipedia.org/wiki/Robinia_pseudoacacia"
         },
         {
@@ -570,7 +570,7 @@
           "source": "https://en.wikipedia.org/wiki/Carpinus_betulus"
         },
         {
-          "text": "Ясен — єдина деревина для ключок у ірландському герлінгу.",
+          "text": "Ясен, єдина деревина для ключок у ірландському герлінгу.",
           "source": "https://en.wikipedia.org/wiki/Fraxinus_excelsior"
         },
         {

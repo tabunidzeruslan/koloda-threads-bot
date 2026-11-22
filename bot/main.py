@@ -1219,7 +1219,7 @@ class Bot:
         parts = [trends.weather_line(self.s.get("weather")), trends.calendar_note(self.now.date())]
         dt = self.s.get("day_trends") or {}
         if dt.get("day") == self.today_key() and dt.get("topics"):
-            parts.append("Про що сьогодні говорять Київ і Україна (можна просто бути в темі без дров; місток до дров тільки якщо логічний і смішний): "
+            parts.append("Про що сьогодні говорять Київ і Україна (пиши ТІЛЬКИ українською, навіть якщо заголовок російською; можна просто бути в темі без дров; місток до дров тільки якщо логічний і смішний): "
                          + "; ".join(f"{t['title']} (кут: {t['angle']})" for t in dt["topics"][:5]))
         return " ".join(x for x in parts if x)
 

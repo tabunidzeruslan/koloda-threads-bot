@@ -48,6 +48,10 @@ def similar(a: str, b: str) -> float:
     return difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
+RUSSIAN_WORDS = re.compile(r"\b(как|если|только|очень|сейчас|когда|почему|сколько|нужно|можно|хорошо|спасибо|сегодня|тоже|"
+                           r"всегда|никогда|потому|чтобы|ничего|говорят|дрова есть|купить|продам|недорого|привет|пожалуйста)\b")
+
+
 def check(text: str, *, sell: bool, today: date, recent: list[str], examples: list[str]) -> str | None:
     """Return a reason to reject, or None if the text passes the hard filters."""
     t = text.strip()
@@ -64,6 +68,8 @@ def check(text: str, *, sell: bool, today: date, recent: list[str], examples: li
         return "список"
     if RUSSIAN_LETTERS.search(t):
         return "російські літери"
+    if RUSSIAN_WORDS.search(t.lower()):
+        return "російські слова (у постах тільки українська)"
     low = t.lower()
     for w in BANNED:
         if w in low:
@@ -109,7 +115,7 @@ SYSTEM = """ГОЛОВНЕ: кожен пост або реально корис
 а найкраще і те, і інше. Пластмасові рекламні фрази («стабільне тепло», «не підводить», «затишок») = провал.
 Мета акаунта: продавати дрова і отримувати заявки, тому люди мають запамʼятати, що Koloda = сухі дрова, чесний обʼєм,
 доставка по Києву і області сьогодні.
-Ти пишеш пости для Threads від імені київського продавця дров Koloda. Пиши українською, як жива людина з дров'яного бізнесу, а не як маркетолог чи ШІ.
+Ти пишеш пости для Threads від імені київського продавця дров Koloda. Пиши ТІЛЬКИ українською (російська мова в постах і відповідях заборонена повністю, навіть окремі слова і цитати), як жива людина з дров'яного бізнесу, а не як маркетолог чи ШІ.
 Правила:
 - 2-6 коротких рядків, 100-220 символів разом. Перший рядок - гачок до 60 символів: впізнаваний біль, абсурд або несподіваний факт.
 - Мета: людина думає «та ну!», «у мене теж!» або «не згоден» і пише коментар.
@@ -147,6 +153,22 @@ def knowledge_sample(rnd: random.Random | None = None, n: int = 12) -> list[str]
     facts = [f["text"] for sec in kb.get("sections", []) for f in sec.get("facts", []) if f.get("text")]
     rnd = rnd or random.Random()
     return rnd.sample(facts, min(n, len(facts)))
+
+
+def topic_knowledge(text: str, limit: int = 3) -> list[dict]:
+    """Deep guides (data/people_topics.json) whose keywords match the topic, role or rubric of the post."""
+    try:
+        guides = load("people_topics.json").get("topic_guides", {})
+    except (OSError, ValueError):
+        return []
+    low = text.lower()
+    scored = []
+    for name, g in guides.items():
+        hits = sum(1 for k in g.get("keys", []) if k in low)
+        if hits:
+            scored.append((hits, name, g))
+    scored.sort(key=lambda x: -x[0])
+    return [{"тема": n, "знання": g["know"], "питання": g.get("questions", [])} for _, n, g in scored[:limit]]
 
 
 def rules() -> dict:
@@ -204,6 +226,16 @@ def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[st
         lines.append("Контекст дня (можна використати, не обовʼязково): " + background)
     if role:
         lines.append("РОЛЬ ЦЬОГО ПОСТА В ПЛАНІ ДНЯ (усі варіанти мають їй відповідати): " + role)
+    deep = topic_knowledge(" ".join([role, topic, " ".join(rubrics)]))
+    if not deep and not topic:
+        try:
+            g = load("people_topics.json").get("topic_guides", {})
+            name = random.choice(sorted(g)) if g else None
+            deep = [{"тема": name, "знання": g[name]["know"], "питання": g[name].get("questions", [])}] if name else []
+        except (OSError, ValueError):
+            deep = []
+    if deep:
+        lines.append("ГЛИБОКІ ЗНАННЯ ПО ТЕМІ (точні, спирайся на них, не вигадуй поза ними): " + json.dumps(deep, ensure_ascii=False))
     try:
         reach = load("daily_plan.json").get("reach", {})
         if reach:
