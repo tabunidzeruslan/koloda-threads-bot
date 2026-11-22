@@ -33,6 +33,33 @@ HYPE_SPACING_MIN = 30
 TIME_BUDGET = 6 * 60
 
 
+def secret_shapes() -> list[str]:
+    """Describe the form of secrets without revealing them (helps the owner fix copy/paste mistakes)."""
+    import re as _re
+    out = []
+
+    def shape(name, ok, hint):
+        v = os.environ.get(name, "")
+        if not v:
+            return
+        raw = v
+        v = v.strip()
+        issues = []
+        if raw != v:
+            issues.append("пробелы или перенос строки по краям")
+        if " " in v or "\n" in v:
+            issues.append("пробелы внутри")
+        if not ok(v):
+            issues.append(hint)
+        out.append(f"{'✅' if not issues else '⚠️'} {name}: длина {len(v)}" + (f", {'; '.join(issues)}" if issues else ""))
+
+    shape("CF_ACCOUNT_ID", lambda v: bool(_re.fullmatch(r"[0-9a-f]{32}", v)), "ожидается 32 символа 0-9 a-f (Account ID)")
+    shape("CF_API_TOKEN", lambda v: 35 <= len(v) <= 60 and bool(_re.fullmatch(r"[A-Za-z0-9_\-]+", v)) and not _re.fullmatch(r"[0-9a-f]{32}", v),
+          "не похоже на API Token Cloudflare (обычно 40 символов; не путать с Account ID и Global API Key)")
+    shape("MEDIA_TOKEN", lambda v: v.startswith(("github_pat_", "ghp_")), "ключ GitHub должен начинаться с github_pat_")
+    return out
+
+
 def log(*a):
     print(net.scrub(" ".join(str(x) for x in a)), flush=True)
 
@@ -596,6 +623,7 @@ class Bot:
                     self.s["gemini_model"] = self.gm.model
         else:
             out.append("❌ Нет секрета GEMINI_API_KEY")
+        out += secret_shapes()
         if self.images:
             def img_test():
                 il = writer.load("illustration.json")
