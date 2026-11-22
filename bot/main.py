@@ -1504,7 +1504,7 @@ class Bot:
         self.s["buyers_day"] = self.today_key()
         me = (self.s.get("threads_username") or "koloda_tm").lower()
         seen = set(self.s.get("seen_leads", []))
-        found, err = [], ""
+        found, err, own = [], "", []
         for q in self.BUYER_QUERIES:
             if not self.time_left():
                 break
@@ -1514,7 +1514,10 @@ class Bot:
                 err = net.scrub(str(e))[:200]
                 break
             for p in posts:
-                if p.get("id") in seen or (p.get("username") or "").lower() == me:
+                if (p.get("username") or "").lower() == me:
+                    own.append(p)
+                    continue
+                if p.get("id") in seen:
                     continue
                 if since_minutes(p.get("timestamp", "").replace("+0000", "+00:00"), self.now) > 3 * 1440:
                     continue
@@ -1526,6 +1529,11 @@ class Bot:
             for p in found[:8]:
                 lines.append(f"\n@{p.get('username', '?')}: {(p.get('text') or '').strip()[:160]}\n{p.get('permalink', '')}")
             self.say("\n".join(lines), important=True)
+        elif force and own and not err:
+            p = own[0]
+            self.say("Пошук працює. Поки Meta не схвалила доступ, видно тільки наші пости. Так виглядатиме знахідка:\n\n"
+                     f"@{p.get('username', '?')}: {(p.get('text') or '').strip()[:160]}\n{p.get('permalink', '')}\n\n"
+                     "Відповідаєте ви самі, вручну в Threads.")
         elif force:
             self.say("Нових постів про пошук дров не знайшов." + (f" Помилка: {err}" if err else
                      " Поки Meta не схвалила доступ, пошук бачить тільки наші пости."))
