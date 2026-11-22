@@ -1,0 +1,603 @@
+{
+  "note": "Фактична база для постів koloda.ua. Кожен факт має джерело, яке було відкрито під час дослідження (листопад 2026). Числа з європейських/американських джерел орієнтовні; де джерела розходяться, наведено діапазон. Без цін і політики.",
+  "sections": [
+    {
+      "topic": "Породи: щільність, тепловіддача, для чого краще",
+      "facts": [
+        {
+          "text": "Складометр дуба при вологості 20% дає приблизно 1930 кВт·год, бука ~1885, берези ~1780, сосни ~1520, ялини ~1330 (дані баварського інституту лісу LWF).",
+          "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
+        },
+        {
+          "text": "1 м³ щільної дубової деревини важить ~714 кг при вологості 20% і ~1142 кг при 50%. Різниця — це вода.",
+          "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
+        },
+        {
+          "text": "Граб важкий і твердий, горить жарко й повільно; теплотворність приблизно 2,3 МВт·год на складометр.",
+          "source": "https://en.wikipedia.org/wiki/Carpinus_betulus"
+        },
+        {
+          "text": "Акація (робінія) горить повільно, з невеликим полум'ям і малим димом; її теплотворність порівнюють з антрацитом.",
+          "source": "https://en.wikipedia.org/wiki/Robinia_pseudoacacia"
+        },
+        {
+          "text": "Щільність деревини акації приблизно 730 кг/м³, твердість за Янкою близько 7560 Н — одна з найтвердіших порід.",
+          "source": "https://en.wikipedia.org/wiki/Robinia_pseudoacacia"
+        },
+        {
+          "text": "Ясен має щільність близько 710 кг/м³ і, на відміну від більшості порід, добре горить навіть свіжозрубаним.",
+          "source": "https://en.wikipedia.org/wiki/Fraxinus_excelsior"
+        },
+        {
+          "text": "Ясен горить жарко й рівно, з малим димом і майже без запаху — добрий вибір для печі та котла.",
+          "source": "https://www.husqvarna.com/uk/learn-and-discover/best-fire-burn/"
+        },
+        {
+          "text": "Дуб дає дуже високу тепловіддачу, горить довго і рівно, з малим димом за умови доброї просушки.",
+          "source": "https://www.husqvarna.com/uk/learn-and-discover/best-fire-burn/"
+        },
+        {
+          "text": "Дуб, граб, бук і ясен довго горять і повільно розгораються, мають високу тепловіддачу.",
+          "source": "https://tsn.ua/other/ne-zabivayut-dimohid-ekonomni-i-dayut-bagato-zharu-specialisti-nazvali-naykraschi-drova-dlya-pichki-2677905.html"
+        },
+        {
+          "text": "Береза швидко сохне, легко колеться, має приємний запах і дає багато жару, але швидко гниє при довгому зберіганні.",
+          "source": "https://tsn.ua/other/ne-zabivayut-dimohid-ekonomni-i-dayut-bagato-zharu-specialisti-nazvali-naykraschi-drova-dlya-pichki-2677905.html"
+        },
+        {
+          "text": "Вільха м'яка, на зрізі біла, згодом рожевіє до блідо-червоного; з неї виходить якісне деревне вугілля.",
+          "source": "https://en.wikipedia.org/wiki/Alnus_glutinosa"
+        },
+        {
+          "text": "Вільха та осика дають менше тепла за тверді породи, зате майже не димлять.",
+          "source": "https://tsn.ua/other/ne-zabivayut-dimohid-ekonomni-i-dayut-bagato-zharu-specialisti-nazvali-naykraschi-drova-dlya-pichki-2677905.html"
+        },
+        {
+          "text": "Сосна горить швидко, високим полум'ям, тепловіддача низька-середня; смоляні кишені можуть давати іскри.",
+          "source": "https://www.husqvarna.com/uk/learn-and-discover/best-fire-burn/"
+        },
+        {
+          "text": "На кілограм сухої маси хвойна деревина дає навіть трохи більше енергії (5,2 кВт·год проти 5,0 у листяних), але легша за об'ємом.",
+          "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
+        },
+        {
+          "text": "Середня щільність паливної деревини за FAO: хвойні ~625 кг/м³, листяні ~750 кг/м³.",
+          "source": "https://www.fao.org/4/ac628e/ac628e11.htm"
+        },
+        {
+          "text": "За таблицею Університету Кентуккі, на корд акація дає ~28,3 млн BTU, білий дуб ~27,9, бук ~26,3, ясен ~24,6, біла сосна ~15 (американські види).",
+          "source": "https://www.uky.edu/Ag/Forestry/McLaren/firewood_properties.htm"
+        }
+      ]
+    },
+    {
+      "topic": "Вологість: свіжі vs сухі дрова",
+      "facts": [
+        {
+          "text": "Свіжозрубаний червоний дуб може містити 60–80% вологи.",
+          "source": "https://extension.psu.edu/heating-with-wood-an-introduction"
+        },
+        {
+          "text": "Свіжозрубана деревина зазвичай містить приблизно 40–60% вологи.",
+          "source": "https://novyny.live/ekonomi/kupivlia-drov-v-ukrayini-koli-tsina-ta-iakist-paliva-naikrashcha-300169.html"
+        },
+        {
+          "text": "Для чистого й ефективного горіння дрова сушать до вологості приблизно 20% і нижче.",
+          "source": "https://www.epa.gov/burnwise/best-wood-burning-practices"
+        },
+        {
+          "text": "Повітряно-сухі дрова (15–20% води) дають у середньому ~4 кВт·год/кг, свіжозрубані (50%+) — лише ~2 кВт·год/кг.",
+          "source": "https://lwf.bayern.de/mam/cms04/service/dateien/mb20_scheitholz_2025_rz_web_bf.pdf"
+        },
+        {
+          "text": "На випаровування 1 кг води з дров витрачається близько 0,68 кВт·год тепла — воно йде в димар, а не в дім.",
+          "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
+        },
+        {
+          "text": "Дров з вологістю 12% потрібно приблизно вдвічі менше, ніж з вологістю 50%.",
+          "source": "https://lb.ua/blog/yurii_bolokhovets/533602_pyat_vazhlivih_zapitan_shchodo_drov.html"
+        },
+        {
+          "text": "Сушіння зазвичай триває 6–12 місяців; рекомендують щонайменше пів року.",
+          "source": "https://extension.psu.edu/heating-with-wood-an-introduction"
+        },
+        {
+          "text": "Бук і сосна при правильному зберіганні висихають нижче 20% за рік, а нерозколоті поліна можуть сохнути до 2 років.",
+          "source": "https://lwf.bayern.de/mam/cms04/service/dateien/mb20_scheitholz_2025_rz_web_bf.pdf"
+        },
+        {
+          "text": "Розколювання полін критично прискорює висихання; сушіння починається з моменту колки, а не рубки.",
+          "source": "https://extension.unh.edu/node/2523"
+        },
+        {
+          "text": "Ознаки сухих дров: глибокі радіальні тріщини на торцях, менша вага, дзвінкий звук при ударі поліна об поліно.",
+          "source": "https://extension.unh.edu/node/2484"
+        },
+        {
+          "text": "Суха деревина зазвичай сіріша, з тріщинами на торцях і корою, що відшаровується.",
+          "source": "https://extension.umd.edu/sites/extension.umd.edu/files/publications/FS-937_2012_Buying_and_Storing_Firewood_Pellets.pdf"
+        },
+        {
+          "text": "Найнадійніше — вологомір: розколіть поліно і вставте щупи у свіжий скол; перевірте кілька полін з різних місць.",
+          "source": "https://extension.unh.edu/node/2484"
+        },
+        {
+          "text": "Сира деревина дає більше креозоту, який осідає в димарі і може спричинити його займання.",
+          "source": "https://extension.unh.edu/node/2523"
+        },
+        {
+          "text": "Брикети можуть мати вологість близько 4%, тоді як свіжі дрова — до 65%.",
+          "source": "https://en.wikipedia.org/wiki/Briquette"
+        }
+      ]
+    },
+    {
+      "topic": "Об'єм: складометр, щільний і насипний кубометр",
+      "facts": [
+        {
+          "text": "Складометр (стер) — 1 м³ складених полін разом із проміжками; щільний кубометр — лише сама деревина без повітря.",
+          "source": "https://en.wikipedia.org/wiki/Stere"
+        },
+        {
+          "text": "Чим коротші поліна, тим щільніше укладання: у складометрі приблизно 0,8 м³ деревини при довжині 50 см, 0,7 — при 33 см, 0,6 — при 25 см.",
+          "source": "https://en.wikipedia.org/wiki/Stere"
+        },
+        {
+          "text": "FAO для паливної деревини приймає 1 складометр ≈ 0,65 м³ щільної деревини.",
+          "source": "https://www.fao.org/4/ac628e/ac628e11.htm"
+        },
+        {
+          "text": "Орієнтовно 1 щільний м³ = ~1,4 складометра колотих полін 33 см = ~2,1 м³ насипом.",
+          "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
+        },
+        {
+          "text": "Насипний кубометр колотих дров містить приблизно 0,45–0,5 м³ щільної деревини — менше, ніж складометр (~0,7).",
+          "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
+        },
+        {
+          "text": "Коефіцієнт складометр→щільний залежить від довжини і укладання, тому в джерелах він приблизно 0,6–0,8.",
+          "source": "https://novyny.live/ekonomi/skladenii-chi-shchilnii-kubometr-drov-v-chomu-riznitsia-ta-za-shcho-povinen-zaplatiti-pokupets-338503.html"
+        },
+        {
+          "text": "Перевірка просто: виміряйте висоту, ширину й довжину штабеля і перемножте — це об'єм у складометрах.",
+          "source": "https://novyny.live/ekonomi/skladenii-chi-shchilnii-kubometr-drov-v-chomu-riznitsia-ta-za-shcho-povinen-zaplatiti-pokupets-338503.html"
+        },
+        {
+          "text": "Укладання «хрест-навхрест» або «колодязем» виглядає щільно, але зазвичай містить менше деревини, ніж рівні паралельні ряди.",
+          "source": "https://mda.maryland.gov/weights_measures/Pages/consumer_tips_firewood.aspx"
+        },
+        {
+          "text": "«Кузов», «купа», «машина» — не одиниці виміру; надійніше домовлятися про об'єм у складометрах чи кубометрах.",
+          "source": "https://mda.maryland.gov/weights_measures/Pages/consumer_tips_firewood.aspx"
+        },
+        {
+          "text": "Типовий пікап вміщує лише 1/5–1/2 корду, тож «повна машина» часто менша, ніж здається.",
+          "source": "https://extension.umd.edu/sites/extension.umd.edu/files/publications/FS-937_2012_Buying_and_Storing_Firewood_Pellets.pdf"
+        },
+        {
+          "text": "Сира деревина займає приблизно на 8% більше місця, ніж суха.",
+          "source": "https://extension.umd.edu/sites/extension.umd.edu/files/publications/FS-937_2012_Buying_and_Storing_Firewood_Pellets.pdf"
+        },
+        {
+          "text": "Корд (США) — штабель 1,2×2,4×1,2 м, близько 3,62 м³; 1 складометр ≈ 0,276 корду.",
+          "source": "https://en.wikipedia.org/wiki/Cord_(unit)"
+        },
+        {
+          "text": "Добре мати документ на поставку із зазначенням продавця, дати, об'єму, породи і суми.",
+          "source": "https://mda.maryland.gov/weights_measures/Pages/consumer_tips_firewood.aspx"
+        }
+      ]
+    },
+    {
+      "topic": "Зберігання: дровник і вентиляція",
+      "facts": [
+        {
+          "text": "Дрова зберігають надворі, не на голій землі: на піддонах, брусах або стелажі.",
+          "source": "https://www.epa.gov/burnwise/best-wood-burning-practices"
+        },
+        {
+          "text": "Накривають лише верх штабеля; бокові стінки лишають відкритими, бо закриті боки затримують вологу.",
+          "source": "https://www.epa.gov/burnwise/best-wood-burning-practices"
+        },
+        {
+          "text": "Штабель не варто повністю обгортати плівкою, брезентом чи тканиною.",
+          "source": "https://extension.psu.edu/heating-with-wood-an-introduction"
+        },
+        {
+          "text": "Між штабелем і стіною будинку лишають щонайменше 10 см для провітрювання.",
+          "source": "https://lwf.bayern.de/mam/cms04/service/dateien/mb20_scheitholz_2025_rz_web_bf.pdf"
+        },
+        {
+          "text": "Найкраще місце — сонячне й провітрюване: південна чи західна стіна, відкритий двір.",
+          "source": "https://lwf.bayern.de/mam/cms04/service/dateien/mb20_scheitholz_2025_rz_web_bf.pdf"
+        },
+        {
+          "text": "Свіжі дрова не зберігають у закритих приміщеннях; добовий запас можна заносити в тепле приміщення для підсушування.",
+          "source": "https://lwf.bayern.de/mam/cms04/service/dateien/mb20_scheitholz_2025_rz_web_bf.pdf"
+        },
+        {
+          "text": "Дрова зберігають поза домом, щоб можливі шкідники лишалися надворі.",
+          "source": "https://extension.umd.edu/sites/extension.umd.edu/files/publications/FS-937_2012_Buying_and_Storing_Firewood_Pellets.pdf"
+        },
+        {
+          "text": "Підняття над землею і обрізання рослинності довкола штабеля зменшують заселення комахами.",
+          "source": "https://extension.unh.edu/node/2523"
+        },
+        {
+          "text": "Висушені дрова можна зберігати кілька років; розділяйте запаси за роком і паліть спершу найстаріші.",
+          "source": "https://extension.psu.edu/heating-with-wood-an-introduction"
+        },
+        {
+          "text": "Берізові дрова швидко гниють, тому робити з них запас на багато років не варто.",
+          "source": "https://tsn.ua/other/ne-zabivayut-dimohid-ekonomni-i-dayut-bagato-zharu-specialisti-nazvali-naykraschi-drova-dlya-pichki-2677905.html"
+        },
+        {
+          "text": "Пелети зберігають у сухому накритому місці (гараж, підвал, сарай); у мішках вони тримаються приблизно рік.",
+          "source": "https://extension.umd.edu/sites/extension.umd.edu/files/publications/FS-937_2012_Buying_and_Storing_Firewood_Pellets.pdf"
+        }
+      ]
+    },
+    {
+      "topic": "Топка: розпалювання, тяга, креозот, безпека",
+      "facts": [
+        {
+          "text": "Метод «зверху вниз»: внизу великі поліна, вище — тріска, зверху — папір. Вогонь іде вниз, диму на старті менше.",
+          "source": "https://woodheat.org/top-down-fever.html"
+        },
+        {
+          "text": "При розпалюванні зверху вогнище не завалюється і рідше треба відчиняти дверцята, щоб докласти дров.",
+          "source": "https://woodheat.org/top-down-fever.html"
+        },
+        {
+          "text": "Не розпалюйте бензином, гасом чи рідиною для барбекю — лише папір, суха тріска або натуральні розпалювачі.",
+          "source": "https://www.epa.gov/burnwise/best-wood-burning-practices"
+        },
+        {
+          "text": "Тліючий вогонь з прикритою подачею повітря неефективний і дає багато креозоту; краще жваве гаряче горіння.",
+          "source": "https://www.hearth.com/articles/chimneysweep/hosoftwood.htm"
+        },
+        {
+          "text": "Не паліть фарбовану, просочену деревину, ДСП, фанеру, пластик і сміття.",
+          "source": "https://www.epa.gov/burnwise/best-wood-burning-practices"
+        },
+        {
+          "text": "Димар перевіряють щонайменше раз на рік (стандарт NFPA 211), навіть якщо ним мало користуються.",
+          "source": "https://csia.org/faq.html"
+        },
+        {
+          "text": "Цегляний димар чистять, коли шар сажі досягає ~3 мм; склоподібний креозот механічно не видаляється.",
+          "source": "https://csia.org/faq.html"
+        },
+        {
+          "text": "Чадний газ не має кольору і запаху; ознаки отруєння: головний біль, запаморочення, слабкість, нудота, сплутаність.",
+          "source": "https://www.cdc.gov/carbon-monoxide/about/index.html"
+        },
+        {
+          "text": "Детектор CO з батареєю ставлять біля спалень і міняють приблизно раз на 5 років.",
+          "source": "https://www.cdc.gov/carbon-monoxide/about/index.html"
+        },
+        {
+          "text": "Чадний газ може потрапити в дім через тріщини в печі або погано прочищений димохід.",
+          "source": "https://suspilne.media/343412-ak-ne-otruitisa-cadnim-gazom-poasnue-dsns/"
+        },
+        {
+          "text": "Котли й печі варто встановлювати із залученням ліцензованих фахівців.",
+          "source": "https://suspilne.media/343412-ak-ne-otruitisa-cadnim-gazom-poasnue-dsns/"
+        },
+        {
+          "text": "ДСНС: якщо підлога горюча, перед топкою кріплять металевий лист 50×70 см.",
+          "source": "https://life.pravda.com.ua/society/2022/11/11/251261/"
+        },
+        {
+          "text": "ДСНС: не залишайте піч без нагляду, не перегрівайте її і не сушіть на ній речі.",
+          "source": "https://life.pravda.com.ua/society/2022/11/11/251261/"
+        },
+        {
+          "text": "Не використовуйте вентиляційні канали як димохід.",
+          "source": "https://life.pravda.com.ua/society/2022/11/11/251261/"
+        },
+        {
+          "text": "Дверцята печі тримають зачиненими, окрім закладання дров; попіл — у металеве відро з кришкою надворі.",
+          "source": "https://www.epa.gov/burnwise/best-wood-burning-practices"
+        }
+      ]
+    },
+    {
+      "topic": "Пелети та брикети: RUF, Nestro, Pini Kay",
+      "facts": [
+        {
+          "text": "Пелети — гранули з пресованої тирси діаметром зазвичай 6 мм (буває 8 мм).",
+          "source": "https://en.wikipedia.org/wiki/Pellet_fuel"
+        },
+        {
+          "text": "Сама пелета щільніша за воду (понад 1 т/м³) і тоне, а насипна щільність пелет — приблизно 0,6–0,7 т/м³.",
+          "source": "https://en.wikipedia.org/wiki/Pellet_fuel"
+        },
+        {
+          "text": "Енергія пелет — приблизно 4,6 кВт·год/кг (листяні) та 4,9 кВт·год/кг (хвойні); вологість не більше 10%.",
+          "source": "https://www.eta.co.at/en/products/around-biomass/fuels/"
+        },
+        {
+          "text": "Стандарт ENplus обмежує зольність: A1 — до 0,7%, A2 — до 1,5%, B — до 3%.",
+          "source": "https://www.mass.gov/doc/comparison-of-wood-pellet-standards-and-certifications-51415/download"
+        },
+        {
+          "text": "Пелети ENplus A1 мають теплоту згоряння 16,5–19 МДж/кг.",
+          "source": "https://www.mass.gov/doc/comparison-of-wood-pellet-standards-and-certifications-51415/download"
+        },
+        {
+          "text": "Пелети завдяки формі подаються автоматично шнеком; сучасні пелетні котли мають ККД понад 85%.",
+          "source": "https://en.wikipedia.org/wiki/Pellet_fuel"
+        },
+        {
+          "text": "Деревні брикети пресують із сухої тирси під великим тиском без клею: зв'язує природний лігнін деревини.",
+          "source": "https://fakty.com.ua/ua/ukraine/ekonomika/20261118-tsiny-na-palyvni-brykety-v-ukrayini-u-2026-rotsi-vartist-riznyh-vydiv/"
+        },
+        {
+          "text": "Українські брикети з тирси мають щільність 1,0–1,2 т/м³, теплотворність 19,3–20,5 МДж/кг, зольність 0,5–1,5%.",
+          "source": "https://en.wikipedia.org/wiki/Briquette"
+        },
+        {
+          "text": "RUF — прямокутні брикети-«цеглинки», зручні для складання й зберігання.",
+          "source": "https://fakty.com.ua/ua/ukraine/ekonomika/20261118-tsiny-na-palyvni-brykety-v-ukrayini-u-2026-rotsi-vartist-riznyh-vydiv/"
+        },
+        {
+          "text": "Брикети RUF роблять на гідравлічних пресах формату близько 150×60 мм, без зв'язувальних речовин.",
+          "source": "https://www.directindustry.com/prod/ruf-briquetting-systems/product-40250-2440908.html"
+        },
+        {
+          "text": "RUF легко розпалюються і горять помірно довго; печі не потрібен попередній прогрів.",
+          "source": "https://lektowoodfuels.co.uk/blogs/news/6-types-of-wood-briquettes"
+        },
+        {
+          "text": "Nestro — циліндричні брикети високої щільності; підходять для твердопаливних котлів і печей.",
+          "source": "https://fakty.com.ua/ua/ukraine/ekonomika/20261118-tsiny-na-palyvni-brykety-v-ukrayini-u-2026-rotsi-vartist-riznyh-vydiv/"
+        },
+        {
+          "text": "Nestro вважають одними з найдовше горючих брикетів, з мінімумом золи, але розпалюються вони важче.",
+          "source": "https://www.firewood.co.uk/briquettes/briquette-knowledge-base/briquette-comparison/"
+        },
+        {
+          "text": "Pini Kay — багатогранні брикети (шести- чи восьмигранні) з отвором посередині, що працює як тяга.",
+          "source": "https://www.firewood.co.uk/briquettes/briquette-knowledge-base/briquette-comparison/"
+        },
+        {
+          "text": "Pini Kay роблять екструзією (шнековим пресом) з термообробкою поверхні, що робить брикет щільнішим.",
+          "source": "https://fakty.com.ua/ua/ukraine/ekonomika/20261118-tsiny-na-palyvni-brykety-v-ukrayini-u-2026-rotsi-vartist-riznyh-vydiv/"
+        },
+        {
+          "text": "Брикети з лушпиння соняшнику мають вищу зольність, ніж деревні, тож котел чистять частіше.",
+          "source": "https://fakty.com.ua/ua/ukraine/ekonomika/20261118-tsiny-na-palyvni-brykety-v-ukrayini-u-2026-rotsi-vartist-riznyh-vydiv/"
+        }
+      ]
+    },
+    {
+      "topic": "Камін і мангал: які дрова",
+      "facts": [
+        {
+          "text": "Для шашлику добрі фруктові дрова: яблуня, вишня, груша, абрикос — довго горять і додають аромату.",
+          "source": "https://vikna.tv/styl-zhyttya/yizha/yaki-drova-krashhe-dlya-shashlyku"
+        },
+        {
+          "text": "Хвойні для мангалу не радять: смола псує смак м'яса і забруднює мангал.",
+          "source": "https://vikna.tv/styl-zhyttya/yizha/yaki-drova-krashhe-dlya-shashlyku"
+        },
+        {
+          "text": "Сосну, ялину, ялицю уникають для копчення: смоли й олії дають густий дим.",
+          "source": "https://www.charbroil.com/learn/smoking-wood-flavors"
+        },
+        {
+          "text": "Дуб для копчення дає середню димність — сильнішу за яблуню чи вишню і добре поєднується з фруктовими.",
+          "source": "https://www.charbroil.com/learn/smoking-wood-flavors"
+        },
+        {
+          "text": "Вільху здавна використовують для копчення риби; вона має делікатний, ледь солодкуватий дим.",
+          "source": "https://en.wikipedia.org/wiki/Alnus_glutinosa"
+        },
+        {
+          "text": "Для мангалу не годяться вологі, гнилі й фарбовані дрова: мало жару, багато кіптяви і шкідливих речовин.",
+          "source": "https://vikna.tv/styl-zhyttya/yizha/yaki-drova-krashhe-dlya-shashlyku"
+        },
+        {
+          "text": "Дрова для мангалу краще закладати одразу: підкидання по ходу дає нерівний жар.",
+          "source": "https://vikna.tv/styl-zhyttya/yizha/yaki-drova-krashhe-dlya-shashlyku"
+        },
+        {
+          "text": "Вишня горить чисто і з м'яким солодким ароматом — підходить і для каміна.",
+          "source": "https://www.husqvarna.com/uk/learn-and-discover/best-fire-burn/"
+        },
+        {
+          "text": "Берізова кора добре розпалюється, а береза має приємний запах.",
+          "source": "https://www.husqvarna.com/uk/learn-and-discover/best-fire-burn/"
+        },
+        {
+          "text": "Сосну не рекомендують для топки в приміщенні через смолу; краще як розпалку чи для вогнища надворі.",
+          "source": "https://www.husqvarna.com/uk/learn-and-discover/best-fire-burn/"
+        },
+        {
+          "text": "Акація у відкритому каміні може «стріляти» жаринками на відстань до кількох футів.",
+          "source": "https://en.wikipedia.org/wiki/Robinia_pseudoacacia"
+        },
+        {
+          "text": "Відкритий камін має ККД лише ~10–20%, сучасна піч — 80% і більше.",
+          "source": "https://extension.psu.edu/heating-with-wood-an-introduction"
+        },
+        {
+          "text": "Перед відкритим каміном потрібна захисна сітка або екран.",
+          "source": "https://extension.psu.edu/heating-with-wood-an-introduction"
+        }
+      ]
+    },
+    {
+      "topic": "Сезон і ринок України",
+      "facts": [
+        {
+          "text": "Найнижчі ціни на дрова зазвичай у міжсезоння, з квітня по липень, коли попит мінімальний.",
+          "source": "https://novyny.live/ekonomi/kupivlia-drov-v-ukrayini-koli-tsina-ta-iakist-paliva-naikrashcha-300169.html"
+        },
+        {
+          "text": "З жовтня по січень ціни можуть зростати приблизно на 15–30% залежно від регіону.",
+          "source": "https://novyny.live/ekonomi/kupivlia-drov-v-ukrayini-koli-tsina-ta-iakist-paliva-naikrashcha-300169.html"
+        },
+        {
+          "text": "Купувати дрова варто за 4–6 місяців до сезону, щоб вони встигли висохнути до 15–20%.",
+          "source": "https://novyny.live/ekonomi/kupivlia-drov-v-ukrayini-koli-tsina-ta-iakist-paliva-naikrashcha-300169.html"
+        },
+        {
+          "text": "Сиру колоту деревину можна брати, якщо є 6–9 місяців на сушіння в правильному штабелі.",
+          "source": "https://extension.umd.edu/sites/extension.umd.edu/files/publications/FS-937_2012_Buying_and_Storing_Firewood_Pellets.pdf"
+        },
+        {
+          "text": "Для приватних будинків і дач в Україні дрова залишаються одним з основних видів палива.",
+          "source": "https://novyny.live/ekonomi/kupivlia-drov-v-ukrayini-koli-tsina-ta-iakist-paliva-naikrashcha-300169.html"
+        },
+        {
+          "text": "Державні лісгоспи продають дрова через сервіс «ДроваЄ», де можна знайти лісгосп і подати заявку.",
+          "source": "https://texty.org.ua/fragments/108257/yak-naspravdi-pracyuye-derzhavnyj-servis-drovaye-dlya-naselennya/"
+        },
+        {
+          "text": "Покупці зазвичай чекають на твердолистяні породи, а хвойних у наявності значно більше.",
+          "source": "https://lb.ua/blog/yurii_bolokhovets/533602_pyat_vazhlivih_zapitan_shchodo_drov.html"
+        },
+        {
+          "text": "Дров'яна піч не потребує електрики, а пелетна має електричні вентилятори та автоматику і без світла не працює.",
+          "source": "https://greenbuildingadvisor.com/article/understanding-pellet-stoves"
+        },
+        {
+          "text": "Без живлення в пелетної печі не працює автопідпал (~400 Вт), тож розпалювати доводиться вручну.",
+          "source": "https://greenbuildingadvisor.com/article/understanding-pellet-stoves"
+        },
+        {
+          "text": "Генератори, як і печі, виділяють чадний газ; їх не можна вмикати в закритих приміщеннях і гаражах.",
+          "source": "https://www.cdc.gov/carbon-monoxide/about/index.html"
+        },
+        {
+          "text": "Будинку 150 м² у Німеччині потрібно ~9000 кВт·год на рік — це приблизно 5–7 насипних м³ сухих дров.",
+          "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
+        }
+      ]
+    },
+    {
+      "topic": "Екологія і легальність",
+      "facts": [
+        {
+          "text": "Під час спалювання біомаси вуглець обертається між лісом і атмосферою, а викопне паливо додає вуглець з геологічних запасів.",
+          "source": "https://www.ieabioenergy.com/?p=12247"
+        },
+        {
+          "text": "Здебільшого деревина для енергетики — побічний продукт заготівлі цінніших лісоматеріалів.",
+          "source": "https://www.ieabioenergy.com/?p=12247"
+        },
+        {
+          "text": "Ключова умова сталості — відновлення лісів і збереження їхньої здатності поглинати CO₂.",
+          "source": "https://www.ieabioenergy.com/?p=12247"
+        },
+        {
+          "text": "Паливо на збір, переробку і транспорт біомаси зазвичай становить менше 10–15% її енергії.",
+          "source": "https://www.ieabioenergy.com/?p=12247"
+        },
+        {
+          "text": "Брикети вважають відновлюваним паливом: їхній вуглець нещодавно був поглинутий з атмосфери.",
+          "source": "https://en.wikipedia.org/wiki/Briquette"
+        },
+        {
+          "text": "Брикети й пелети роблять з тирси та стружки — відходів деревообробки.",
+          "source": "https://en.wikipedia.org/wiki/Pellet_fuel"
+        },
+        {
+          "text": "Пресування підвищує насипну щільність біомаси у 2–10 разів, що здешевлює перевезення.",
+          "source": "https://www.fao.org/4/T0275E/T0275E04.htm"
+        },
+        {
+          "text": "На виробництво пелет іде лише близько 2–2,5% їхньої енергії.",
+          "source": "https://www.eta.co.at/en/products/around-biomass/fuels/"
+        },
+        {
+          "text": "В Україні діє електронний облік деревини: на дров'яну деревину бирку ставлять на партію.",
+          "source": "https://www.ukrinform.ua/rubric-economy/2605187-v-ukraini-zaprovadili-elektronnu-sistemu-obliku-derevini.html"
+        },
+        {
+          "text": "Сертифікат походження лісоматеріалів синхронізований з обліком, щоб унеможливити фіктивні накладні.",
+          "source": "https://www.ukrinform.ua/rubric-economy/2605187-v-ukraini-zaprovadili-elektronnu-sistemu-obliku-derevini.html"
+        },
+        {
+          "text": "Рубати дерева в лісі без спеціального документа заборонено; купуйте у легальних продавців.",
+          "source": "https://novyny.live/ekonomi/skladenii-chi-shchilnii-kubometr-drov-v-chomu-riznitsia-ta-za-shcho-povinen-zaplatiti-pokupets-338503.html"
+        },
+        {
+          "text": "Дрова не радять перевозити далеко від місця заготівлі, щоб не поширювати шкідників.",
+          "source": "https://extension.psu.edu/heating-with-wood-an-introduction"
+        }
+      ]
+    },
+    {
+      "topic": "Міфи і цікаві факти",
+      "facts": [
+        {
+          "text": "Міф: хвойні дають більше креозоту. Головна причина креозоту — волога деревина, а не смола.",
+          "source": "https://www.hearth.com/articles/chimneysweep/hosoftwood.htm"
+        },
+        {
+          "text": "Найнижчі викиди в тестах сертифікованих EPA печей отримали саме на сосні.",
+          "source": "https://www.hearth.com/articles/chimneysweep/hosoftwood.htm"
+        },
+        {
+          "text": "Різниця «20% води» і «25% вологості» — одне й те саме: перше рахують від маси дров, друге — від сухої деревини.",
+          "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
+        },
+        {
+          "text": "Слово «стер» (складометр) придумали у Франції 1795 року як метричний аналог корду.",
+          "source": "https://en.wikipedia.org/wiki/Stere"
+        },
+        {
+          "text": "Назва корду, ймовірно, походить від мотузки, якою колись міряли дрова.",
+          "source": "https://en.wikipedia.org/wiki/Cord_(unit)"
+        },
+        {
+          "text": "Палі під мостом Ріальто у Венеції — з вільхи: під водою вона дуже довговічна.",
+          "source": "https://en.wikipedia.org/wiki/Alnus_glutinosa"
+        },
+        {
+          "text": "Деревина акації завдяки флавоноїдам може служити в ґрунті понад 100 років.",
+          "source": "https://en.wikipedia.org/wiki/Robinia_pseudoacacia"
+        },
+        {
+          "text": "Угорщина оголосила акацію «гунгарикумом» — елементом національної спадщини; вона важлива для дров і акацієвого меду.",
+          "source": "https://en.wikipedia.org/wiki/Robinia_pseudoacacia"
+        },
+        {
+          "text": "Обрізання граба на дрова допомогло зберегти Еппінгський ліс в Англії.",
+          "source": "https://en.wikipedia.org/wiki/Carpinus_betulus"
+        },
+        {
+          "text": "Ясен — єдина деревина для ключок у ірландському герлінгу.",
+          "source": "https://en.wikipedia.org/wiki/Fraxinus_excelsior"
+        },
+        {
+          "text": "Вірш «Firewood Poem» Селії Конгрів (The Times, 1930) хвалить ясен, який горить і сирим, і сухим.",
+          "source": "https://blogs.bath.ac.uk/edswahs/2022/09/14/a-rhyming-guide-to-winter-firewood/"
+        },
+        {
+          "text": "Складометр букових дров за енергією ≈ 190 л пічного палива або ≈ 390 кг пелет.",
+          "source": "https://lwf.bayern.de/mam/cms04/service/dateien/mb20_scheitholz_2025_rz_web_bf.pdf"
+        },
+        {
+          "text": "10 кВт·год тепла (≈2,5 кг сухих дров) можуть нагріти 860 л води на 10 °C.",
+          "source": "https://lfl.bayern.de/mam/cms04/service/dateien/mb12_energiegehalt-2024_rz_web_bf.pdf"
+        },
+        {
+          "text": "Хвоя і соснова мульча помітно не закислюють ґрунт: навіть шар 5–7 см не змінює pH вимірно.",
+          "source": "https://extension.unh.edu/node/4638"
+        },
+        {
+          "text": "Мульча з кори стримує бур'яни, зберігає вологу і знижує денну температуру ґрунту на величину до ~10 °C.",
+          "source": "https://www.canr.msu.edu/uploads/resources/pdfs/mulch-final-web.pdf"
+        },
+        {
+          "text": "Мульчу кладуть шаром 7–10 см, лишаючи навколо стовбурів дерев вільне кільце ~15 см.",
+          "source": "https://www.canr.msu.edu/uploads/resources/pdfs/mulch-final-web.pdf"
+        }
+      ]
+    }
+  ]
+}
