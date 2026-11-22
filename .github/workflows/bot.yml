@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: "tick = обычный запуск, selftest = проверка ключей, preview = пробные посты"
+        description: "tick = обычный запуск, selftest = проверка ключей, preview = пробные посты, trends = пост по тренду сейчас"
         type: choice
-        options: [tick, selftest, preview]
+        options: [tick, selftest, preview, trends]
         default: tick
       n:
         description: "Сколько пробных постов (для preview)"

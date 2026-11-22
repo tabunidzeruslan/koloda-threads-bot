@@ -526,7 +526,7 @@ class Bot:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--task", default="tick", choices=["tick", "selftest", "preview"])
+    ap.add_argument("--task", default="tick", choices=["tick", "selftest", "preview", "trends"])
     ap.add_argument("--state", default=".state/state.json")
     ap.add_argument("--n", type=int, default=3)
     a = ap.parse_args(argv)
@@ -547,6 +547,8 @@ def main(argv=None) -> int:
             bot.handle_updates()
             if a.task == "selftest":
                 bot.say(bot.selftest())
+            elif a.task == "trends":
+                bot.check_trends(force=True)
             else:
                 bot.preview(max(1, min(a.n, 5)))
     finally:
