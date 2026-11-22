@@ -47,7 +47,7 @@ class FakeThreads:
     def my_posts(self, n):
         return [{"text": t} for t in self.published]
 
-    def publish_text(self, text):
+    def publish_text(self, text, tag=""):
         self.published.append(text)
         return {"id": str(len(self.published)), "permalink": "https://threads.net/p/x"}
 
@@ -62,6 +62,7 @@ def make_bot(now, updates=None, s=None):
     b = Bot(s, tg=FakeTG(updates), gm=mock.Mock(model="m"), threads_secret="tok_secret_123",
             enc_key="k", now=now, rnd=random.Random(1))
     b.th = FakeThreads()
+    b.library = []  # Gemini-flow tests; LibraryTests turn the library on
     b.talk_hours = (0, 24)  # quiet hours are tested separately
     b.s.setdefault("day_trends", {"day": b.today_key(), "topics": []})  # no network in tests
     return b
@@ -581,3 +582,41 @@ class FreedomWeakTests(unittest.TestCase):
         b.s["days"][b.today_key()]["slots"].append(sl2)
         b.send_draft(sl2)
         self.assertEqual(sl2["status"], "skipped")
+
+
+class LibraryTests(unittest.TestCase):
+    def test_library_posts_pass_filters(self):
+        from bot import main as m
+        self.assertGreaterEqual(len(m.LIBRARY), 40)
+        for x in m.LIBRARY:
+            self.assertIsNone(writer.check(x["text"], sell=x["slot"] == "Вечірній продаж", today=date(2026, 1, 10),
+                                           recent=[], examples=[]), x["id"])
+
+    def test_general_slot_uses_library_trend_slot_does_not(self):
+        from bot import main as m
+        b = make_bot(kyiv(8))
+        b.library = m.LIBRARY
+        sl = {"id": "1122-0", "at": 700, "kind": "hook", "status": "new", "tries": 0, "name": "Спір дня"}
+        d = b.from_library(sl)
+        self.assertTrue(d and d["lib"] in b.s["library_used"])
+        self.assertNotEqual(b.from_library(dict(sl))["lib"], d["lib"])
+        self.assertIsNone(b.from_library(dict(sl, topic="тренд")))
+        self.assertIsNone(b.from_library(dict(sl, kind="hype")))
+
+    def test_day_with_library_publishes_without_gemini(self):
+        from bot import main as m
+        b = make_bot(kyiv(7))
+        b.library = m.LIBRARY
+        b.s["schedule_on"] = True
+        with mock.patch("bot.writer.write_post", return_value=None) as wp:
+            b.tick()
+            b.tick()
+        slots = b.slots()
+        general = [x for x in slots if not x.get("topic")]
+        self.assertTrue(general and all((x.get("draft") or {}).get("lib") for x in general))
+        self.assertTrue(all(c.kwargs.get("topic") for c in wp.call_args_list))  # Gemini only for weather/trend topics
+        sl = general[0]
+        sl["status"] = "approved"
+        b.now = kyiv(11, 20)
+        b.publish(sl)
+        self.assertEqual(sl["status"], "published")

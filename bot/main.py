@@ -169,11 +169,22 @@ def log(*a):
     print(net.scrub(" ".join(str(x) for x in a)), flush=True)
 
 
+def _library() -> list[dict]:
+    try:
+        return writer.load("library.json")["posts"]
+    except Exception:
+        return []
+
+
+LIBRARY = _library()
+
+
 class Bot:
     def __init__(self, s: dict, *, tg: Telegram | None, gm: Gemini | None, threads_secret: str,
                  enc_key: str, chat_id_env: str = "", persist=lambda: None, now: datetime | None = None,
                  rnd: random.Random | None = None, images: Images | None = None):
         self.s, self.tg, self.gm = s, tg, gm
+        self.library = LIBRARY
         self.images = images
         self.threads_secret, self.enc_key = threads_secret, enc_key
         self.persist = persist
@@ -1229,8 +1240,6 @@ class Bot:
     def draft_pending(self, force: bool = False) -> None:
         if not force and (not self.s["schedule_on"] or self.s.get("paused_reason") or self.quiet()):
             return
-        if not self.gm:
-            return
         made = 0
         today = self.today_key()
         upcoming = [x for k in sorted(self.s["days"]) if k >= today for x in self.s["days"][k]["slots"]]
@@ -1243,6 +1252,16 @@ class Bot:
                     self.add_image(sl)
                 self.send_draft(sl)
                 self.persist()
+                continue
+            lib = self.from_library(sl)
+            if lib:
+                made += 1
+                sl["tries"] += 1
+                sl["draft"] = lib
+                self.send_draft(sl)
+                self.persist()
+                continue
+            if not self.gm:
                 continue
             made += 1
             sl["tries"] += 1
@@ -1257,6 +1276,24 @@ class Bot:
                 self.say(f"⚠️ Не зміг написати добрий пост на {hhmm(sl['at'])} за 5 спроб, слот пропущено.")
             self.persist()
             self.poll_owner()
+
+    def from_library(self, sl: dict) -> dict | None:
+        """General-topic slots take a ready post from data/library.json; Gemini is kept for trends and situations."""
+        if sl.get("topic") or sl["kind"] not in ("hook", "sell") or sl.get("sell") or not sl.get("name"):
+            return None
+        used = self.s.setdefault("library_used", [])
+        cold = self.now.month in (10, 11, 12, 1, 2, 3)
+        recent = self.recent_texts()
+        pool = [x for x in self.library if x["slot"] == sl["name"] and x["id"] not in used
+                and (x.get("season", "any") == "any" or (x["season"] == "cold") == cold)]
+        self.rnd.shuffle(pool)
+        for x in pool:
+            if writer.check(x["text"], sell=sl["kind"] == "sell", today=self.now.date(), recent=recent, examples=[]):
+                continue
+            used.append(x["id"])
+            return {"text": x["text"], "rubric": x.get("rubric", ""), "score": 8, "why": "з бібліотеки готових постів",
+                    "fact": "ok", "tag": x.get("tag", ""), "lib": x["id"]}
+        return None
 
     def background(self) -> str:
         parts = [trends.weather_line(self.s.get("weather")), trends.calendar_note(self.now.date())]
