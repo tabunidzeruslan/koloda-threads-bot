@@ -434,7 +434,10 @@ def reply_draft(gm: Gemini, *, post: str, comment: str, author: str) -> dict:
     data = parse_json(gm.generate(ctx, system=REPLIER, json_mode=True, temperature=0.6))
     if not isinstance(data, dict):
         return {"type": "other", "answer": "", "safe": False, "lead": False}
-    return {"type": str(data.get("type", "other")), "answer": humanize(str(data.get("answer") or "").strip()[:480]),
+    ans = humanize(str(data.get("answer") or "").strip()[:480])
+    if RUSSIAN_LETTERS.search(ans) or RUSSIAN_WORDS.search(ans.lower()):
+        data["safe"] = False  # replies only in Ukrainian; a Russian draft never goes out by itself
+    return {"type": str(data.get("type", "other")), "answer": ans,
             "safe": bool(data.get("safe")), "lead": bool(data.get("lead"))}
 
 
