@@ -170,6 +170,16 @@ def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[st
         "Приклади тону (не копіюй, лише стиль): " + json.dumps(style["examples"], ensure_ascii=False),
         "Недавні пости (не повторюй теми і жарти): " + json.dumps(recent[-12:], ensure_ascii=False),
     ]
+    try:
+        pt = load("people_topics.json")
+        lines.append("Що людей реально хвилює про дрова (з пошукових запитів України; бери звідси теми питань і суперечок): "
+                     + json.dumps(random.sample(pt["topics"], min(5, len(pt["topics"]))), ensure_ascii=False))
+        lines.append("Головна суперечка ніші, складометр і навал (факти точні, використовуй): "
+                     + json.dumps(pt["volume_truth"]["facts"], ensure_ascii=False)
+                     + " Кути: " + json.dumps(random.sample(pt["volume_truth"]["post_angles"], 2), ensure_ascii=False))
+        lines.append("Емоції, на які люди відповідають: " + json.dumps(pt["emotions_that_work"], ensure_ascii=False))
+    except (OSError, ValueError, KeyError):
+        pass
     kc = kyiv_context(today)
     if kc:
         lines.append(kc)
@@ -480,6 +490,9 @@ def factcheck(gm: Gemini, text: str, topic: str = "") -> tuple[str, str, str | N
     """Returns (status, text, note). status: ok | fixed | bad | unchecked."""
     current = text
     given = (f"Інфопривід від власника акаунта (вважай правдою, не перевіряй): {topic[:400]}\n") if topic else ""
+    given += ("Факти компанії від власника (правда, не перевіряй і не прибирай): у Koloda 1 куб навалом = 0,75 складометра; "
+              "продаємо кругляк оптом; доставка по Києву та області в день замовлення. "
+              + ("; ".join(OWNER["facts"][:10]) if OWNER["facts"] else "") + "\n")
     search_ok = True
     for round_ in range(3):
         try:
@@ -583,7 +596,8 @@ def render_prompt(scene: str, il: dict | None = None, character: bool = True) ->
 def expert_brief() -> str:
     """Company facts, FAQ, marketing strategy and image-generation guide for the owner chat."""
     out = []
-    for name, keys in (("company.json", None), ("strategy.json", None), ("image_guide.json", ("how_it_works", "common_fixes"))):
+    for name, keys in (("company.json", None), ("people_topics.json", None), ("daily_plan.json", None),
+                       ("strategy.json", None), ("image_guide.json", ("how_it_works", "common_fixes"))):
         try:
             d = load(name)
         except (OSError, ValueError):
