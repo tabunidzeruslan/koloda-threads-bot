@@ -115,3 +115,13 @@ class CastTest(unittest.TestCase):
         self.assertEqual(len(two), 4)
         self.assertEqual({p.parent.name for p in two}, {"ivanovych", "angelina"})
         self.assertEqual(len(Images.references(["nobody"])), 0)
+
+
+class ThreadsApiShapeTest(unittest.TestCase):
+    def test_methods_exist(self):
+        from bot.threads import Threads, metric_value
+        for m in ("publish_text", "publish_image", "publish_reply", "refresh", "replies", "my_posts",
+                  "account_stats", "post_stats"):
+            self.assertTrue(callable(getattr(Threads, m, None)), m)
+        self.assertEqual(metric_value({"total_value": {"value": 5}}), 5)
+        self.assertEqual(metric_value({"values": [{"value": 2}, {"value": 3}]}), 5)

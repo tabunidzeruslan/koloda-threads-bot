@@ -47,10 +47,11 @@ class Threads:
         return {m["name"]: metric_value(m) for m in data}
 
 
-def metric_value(m: dict) -> int:
-    if isinstance(m.get("total_value"), dict):
-        return int(m["total_value"].get("value") or 0)
-    return sum(int(v.get("value") or 0) for v in m.get("values", []))
+    def publish_reply(self, text: str, reply_to_id: str, wait: float = 4.0) -> dict:
+        """Answer a comment under our post (threads_manage_replies)."""
+        container = self._post("me/threads", media_type="TEXT", text=text, reply_to_id=reply_to_id)["id"]
+        time.sleep(wait)
+        return {"id": self._post("me/threads_publish", creation_id=container)["id"]}
 
     def publish_text(self, text: str, wait: float = 4.0) -> dict:
         container = self._post("me/threads", media_type="TEXT", text=text)["id"]
@@ -83,3 +84,9 @@ def metric_value(m: dict) -> int:
     def refresh(self) -> dict:
         return net.request("GET", "https://graph.threads.net/refresh_access_token",
                            params={"grant_type": "th_refresh_token", "access_token": self.token})
+
+
+def metric_value(m: dict) -> int:
+    if isinstance(m.get("total_value"), dict):
+        return int(m["total_value"].get("value") or 0)
+    return sum(int(v.get("value") or 0) for v in m.get("values", []))
