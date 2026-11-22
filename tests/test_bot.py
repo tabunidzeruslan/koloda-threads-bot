@@ -15,11 +15,14 @@ class FakeTG:
     def __init__(self, updates=None):
         self.sent, self.edits, self._updates, self.n = [], [], list(updates or []), 100
 
-    def updates(self, offset):
+    def updates(self, offset, wait=0):
         ups = [u for u in self._updates if offset is None or u["update_id"] >= offset]
         return ups
 
-    def send(self, chat, text, buttons=None):
+    def set_commands(self, commands):
+        self.commands = commands
+
+    def send(self, chat, text, buttons=None, keyboard=None):
         self.n += 1
         self.sent.append((text, buttons))
         return self.n

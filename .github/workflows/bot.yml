@@ -2,8 +2,9 @@ name: bot
 
 on:
   schedule:
-    # every 30 min, 04:07-20:37 UTC = 06:07-22:37 Kyiv in winter (07:07-23:37 in summer)
-    - cron: "7,37 4-20 * * *"
+    # every 5 min; each run also listens to Telegram for ~4 min, so buttons answer within seconds.
+    # The repo is public, so Actions minutes are free.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       task:

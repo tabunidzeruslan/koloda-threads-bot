@@ -19,12 +19,32 @@ from .threads import Threads
 STATUS_RU = {"new": "ждёт черновика", "sent": "ждёт вашего решения", "approved": "одобрен",
              "publishing": "публикуется", "published": "опубликован", "failed": "ошибка",
              "skipped": "пропущен", "expired": "не успел"}
-HELP = ("Команды:\n/status - что запланировано\n/on - включить ежедневные черновики (3 в день)\n"
+HELP = ("Всё есть в меню кнопками внизу чата:\n"
+        "📅 План: что запланировано сегодня, включить или выключить расписание\n"
+        "📊 Статистика: просмотры, лайки, подписчики за 7 дней и лучшие посты\n"
+        "✍️ Пост сейчас: обычный или продающий черновик прямо сейчас\n"
+        "🔥 Хайп: тренды Украины сейчас или своя тема (можно скриншот)\n"
+        "🎨 Картинка: Иванович рисует что угодно, ничего не публикуется\n"
+        "💬 Комментарии: свежие ответы под нашими постами\n"
+        "⚙️ Настройки: тишина на день, авто-картинки, пробные посты, проверка\n\n"
+        "Команды тоже работают:\n/status - что запланировано\n/on - включить ежедневные черновики (3 в день)\n"
         "/off - выключить\n/tysha - тишина на сегодня (день траура или тяжёлых обстрелов)\n/preview 3 - показать N пробных постов (ничего не публикуется)\n"
         "/selftest - проверить ключи и разрешения\n/draw тема - пробная картинка с Ивановичем (ничего не публикуется)\n\n"
         "Под черновиком кнопки: Опубликовать / Другой вариант / Пропустить. "
         "Чтобы поправить текст, ответьте (Reply) на черновик своим текстом.\n"
         "Бот просыпается раз в 30 минут, поэтому ответ приходит с задержкой.")
+MENU = [["📅 План", "📊 Статистика"], ["✍️ Пост сейчас", "🔥 Хайп"],
+        ["🎨 Картинка", "💬 Комментарии"], ["⚙️ Настройки", "❓ Помощь"]]
+MENU_VERSION = 1
+MENU_ACTIONS = {"📅 План": "menu_plan", "📊 Статистика": "menu_stats", "✍️ Пост сейчас": "menu_post",
+                "🔥 Хайп": "menu_hype", "🎨 Картинка": "menu_draw", "💬 Комментарии": "menu_comments",
+                "⚙️ Настройки": "menu_settings", "❓ Помощь": "menu_help"}
+COMMANDS = [("menu", "Показать меню"), ("status", "План на сегодня"), ("stats", "Статистика Threads"),
+            ("post", "Черновик прямо сейчас"), ("hype", "Пост на горячую тему"), ("draw", "Картинка с Ивановичем"),
+            ("comments", "Новые комментарии"), ("on", "Включить расписание"), ("off", "Выключить расписание"),
+            ("tysha", "Тишина на сегодня"), ("selftest", "Проверка"), ("help", "Помощь")]
+AWAIT_MINUTES = 20
+LISTEN_SECONDS = 240  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
 MAX_GEN_PER_RUN = 2
 MAX_AUTO_IMAGES_PER_DAY = 1  # the bot decides itself which post deserves a picture
 MAX_HYPE_IMAGES_PER_DAY = 1  # plus one for a trend post
@@ -104,11 +124,11 @@ class Bot:
     def owner(self) -> int | None:
         return self.s.get("owner_chat_id")
 
-    def say(self, text: str, buttons=None) -> int | None:
+    def say(self, text: str, buttons=None, keyboard=None) -> int | None:
         self.summary.append(text)
         if self.tg and self.owner:
             try:
-                return self.tg.send(self.owner, text, buttons)
+                return self.tg.send(self.owner, text, buttons, keyboard=keyboard)
             except net.NetError as e:
                 log("telegram send failed:", e)
         return None
@@ -172,14 +192,14 @@ class Bot:
             log("token refreshed")
 
     # ---------- telegram input
-    def handle_updates(self) -> None:
+    def handle_updates(self, wait: int = 0) -> int:
         if not self.tg:
-            return
+            return 0
         try:
-            ups = self.tg.updates(self.s.get("tg_offset"))
+            ups = self.tg.updates(self.s.get("tg_offset"), wait=wait)
         except net.NetError as e:
             log("getUpdates failed:", e)
-            return
+            return 0
         for u in ups:
             self.s["tg_offset"] = u["update_id"] + 1
             try:
@@ -194,6 +214,7 @@ class Bot:
                 self.tg.updates(self.s["tg_offset"])
             except net.NetError:
                 pass
+        return len(ups)
 
     def on_message(self, m: dict) -> None:
         chat = m.get("chat", {})
@@ -203,7 +224,7 @@ class Bot:
         if not self.owner:
             if text.lower().lstrip("/").startswith("start") or text.lower() in ("привет", "привіт"):
                 self.s["owner_chat_id"] = chat["id"]
-                self.say("Готово, теперь бот пишет вам.\n\n" + HELP)
+                self.say("Готово, теперь бот пишет вам.\n\n" + HELP, keyboard=MENU)
             return
         if chat["id"] != self.owner:
             return
@@ -211,23 +232,46 @@ class Bot:
             self.tg.delete(chat["id"], m["message_id"])
             self.say("Похоже на ключ или токен. Я удалил сообщение: секреты вводятся только в GitHub → Settings → Secrets.")
             return
+        if text in MENU_ACTIONS:
+            self.s.pop("await", None)
+            return getattr(self, MENU_ACTIONS[text])()
         reply_to = (m.get("reply_to_message") or {}).get("message_id")
+        aw = self.s.get("await")
+        if aw and not reply_to and not text.startswith("/"):
+            self.s.pop("await", None)
+            if since_minutes(aw.get("at"), now_kyiv()) <= AWAIT_MINUTES:
+                img = self.tg.download_photo(m["photo"][-1]["file_id"]) if m.get("photo") else None
+                topic = text or ("тема на скріншоті" if img else "")
+                if aw["what"] == "draw" and topic:
+                    self.say("🎨 Рисую, это около минуты…")
+                    return self.draw(topic)
+                if aw["what"] == "hype" and topic:
+                    self.say("🔥 Пишу пост на эту тему, около минуты…")
+                    return self.make_hype(topic, url="", images=[img] if img else None, source="ваш хайп")
         if reply_to and m.get("photo") and not text.startswith("/"):
             return self.on_owner_photo(reply_to, m["photo"][-1]["file_id"])
         if reply_to and not text.startswith("/"):
             return self.on_edit(reply_to, text)
         cmd, _, arg = text.partition(" ")
         cmd = cmd.split("@")[0].lower()
-        if cmd in ("/start", "/help"):
-            self.say(HELP)
+        if cmd in ("/start", "/help", "/menu"):
+            self.say(HELP, keyboard=MENU)
         elif cmd == "/status":
-            self.say(self.status_text())
+            self.menu_plan()
+        elif cmd == "/stats":
+            self.menu_stats()
+        elif cmd == "/post":
+            self.menu_post()
+        elif cmd == "/comments":
+            self.menu_comments()
         elif cmd == "/on":
             self.s["schedule_on"], self.s["paused_reason"], self.s["fail_streak"] = True, None, 0
             self.say("Включено: каждый день 3 черновика, публикация только после вашей кнопки.")
         elif cmd == "/off":
             self.s["schedule_on"] = False
             self.say("Выключено. Новые черновики не готовлю, одобренные тоже не публикую.")
+        elif cmd == "/hype" and not arg.strip() and not m.get("photo") and not m.get("reply_to_message"):
+            self.menu_hype()
         elif cmd == "/hype":
             img = None
             if m.get("photo"):
@@ -238,6 +282,8 @@ class Bot:
                 self.say("Напишите после /hype, о чём хайп, или пришлите скрин с подписью /hype.")
                 return
             self.make_hype(topic, url="", images=[img] if img else None, source="ваш /hype")
+        elif cmd in ("/draw", "/малюй", "/рисуй") and not arg.strip() and not m.get("reply_to_message"):
+            self.menu_draw()
         elif cmd in ("/draw", "/малюй", "/рисуй"):
             self.draw(arg.strip() or (m.get("reply_to_message") or {}).get("text") or "")
         elif cmd == "/trends":
@@ -251,7 +297,7 @@ class Bot:
         elif cmd == "/selftest":
             self.say(self.selftest())
         else:
-            self.say("Не понял. " + HELP)
+            self.say("Не понял. Выберите действие в меню внизу 👇", keyboard=MENU)
 
     def on_edit(self, msg_id: int, text: str) -> None:
         for d in self.s["days"].values():
@@ -285,6 +331,9 @@ class Bot:
         if cq.get("from", {}).get("id") != self.owner and cq.get("message", {}).get("chat", {}).get("id") != self.owner:
             return
         action, _, rest = (cq.get("data") or "").partition("|")
+        if action == "m":
+            self.tg.answer(cq["id"])
+            return self.on_menu(rest)
         sid, _, ver = rest.partition("|")
         sl = self.find_slot(sid)
         if not sl or str(sl.get("v")) != ver or sl["status"] not in ("sent", "approved"):
@@ -319,6 +368,170 @@ class Bot:
             sl["status"] = "skipped"
             self.tg.answer(cq["id"], "Пропускаю")
             self.tg.edit(self.owner, msg_id, f"⏭ Пропущено\n\n{text}")
+
+    # ---------- menu
+    def menu_plan(self) -> None:
+        on = self.s["schedule_on"] and not self.s.get("paused_reason")
+        self.say(self.status_text(), buttons=[
+            [("⏸ Выключить расписание", "m|off") if on else ("▶️ Включить расписание", "m|on")],
+            [("🤫 Тишина сегодня", "m|quiet"), ("✍️ Пост сейчас", "m|postmenu")]])
+
+    def menu_post(self) -> None:
+        self.say("Какой черновик сделать прямо сейчас? Публикация всё равно только после вашей кнопки.", buttons=[
+            [("📝 Обычный", "m|post"), ("💰 Продающий", "m|sell")],
+            [("👀 3 пробных (без публикации)", "m|preview")]])
+
+    def menu_hype(self) -> None:
+        self.say("Хайп: взять тему из трендов Украины прямо сейчас или вашу?", buttons=[
+            [("📈 Тренды сейчас", "m|trends"), ("✏️ Своя тема", "m|hypeown")]])
+
+    def menu_draw(self) -> None:
+        self.s["await"] = {"what": "draw", "at": now_kyiv().isoformat()}
+        self.say("Напишите одним сообщением, что нарисовать. Например: «Иванович складывает граб в куб и меряет рулеткой».")
+
+    def menu_settings(self) -> None:
+        auto = self.s.get("auto_images", True)
+        on = self.s["schedule_on"] and not self.s.get("paused_reason")
+        self.say("⚙️ Настройки", buttons=[
+            [("⏸ Выключить расписание", "m|off") if on else ("▶️ Включить расписание", "m|on")],
+            [("🤫 Тишина сегодня", "m|quiet"), ("🔔 Отменить тишину", "m|unquiet")],
+            [(f"🖼 Авто-картинки: {'вкл' if auto else 'выкл'}", "m|autoimg")],
+            [("👀 3 пробных поста", "m|preview"), ("🩺 Проверка", "m|selftest")]])
+
+    def menu_help(self) -> None:
+        self.say(HELP, keyboard=MENU)
+
+    def on_menu(self, what: str) -> None:
+        if what == "on":
+            self.s["schedule_on"], self.s["paused_reason"], self.s["fail_streak"] = True, None, 0
+            self.say("▶️ Включено: каждый день 3 черновика, публикация только после вашей кнопки.")
+        elif what == "off":
+            self.s["schedule_on"] = False
+            self.say("⏸ Выключено. Новые черновики не готовлю, одобренные тоже не публикую.")
+        elif what == "quiet":
+            self.s["quiet_day"] = self.today_key()
+            self.say("🤫 Тишина до конца дня: ничего не публикую и не присылаю черновики. Завтра продолжу сам.")
+        elif what == "unquiet":
+            self.s.pop("quiet_day", None)
+            self.say("🔔 Тишина отменена, работаю как обычно.")
+        elif what == "autoimg":
+            self.s["auto_images"] = not self.s.get("auto_images", True)
+            self.say("🖼 Авто-картинки " + ("включены: бот сам решает, где нужна картинка (до 1 в день + к хайпу)."
+                                           if self.s["auto_images"] else "выключены. Картинку можно добавить кнопкой под черновиком."))
+        elif what == "postmenu":
+            self.menu_post()
+        elif what in ("post", "sell"):
+            self.say("✍️ Пишу черновик, около минуты…")
+            self.make_now(sell=what == "sell")
+        elif what == "preview":
+            self.preview(3)
+        elif what == "trends":
+            self.say("📈 Смотрю тренды Украины…")
+            self.check_trends(force=True)
+        elif what == "hypeown":
+            self.s["await"] = {"what": "hype", "at": now_kyiv().isoformat()}
+            self.say("Напишите тему одним сообщением или пришлите скриншот из ленты (можно с подписью).")
+        elif what == "selftest":
+            self.say(self.selftest())
+
+    def make_now(self, sell: bool) -> bool:
+        if not self.gm:
+            self.say("Нет ключа Gemini.")
+            return False
+        key = self.today_key()
+        day = self.s["days"].setdefault(key, {"slots": []})
+        n = sum(1 for x in day["slots"] if x["kind"] in ("now", "sell-now"))
+        sl = {"id": f"{key[5:7]}{key[8:]}-n{n}", "at": minutes_of(now_kyiv()), "kind": "now", "status": "new",
+              "tries": 1, "rejects": 0, "v": 0, "draft": None, "msg_id": None, "sell": sell}
+        post = self.write(sell)
+        if not post:
+            self.say("Не получилось написать хороший пост с первого раза, попробуйте ещё раз.")
+            return False
+        day["slots"].append(sl)
+        sl["draft"] = post
+        if not sell and self.should_illustrate(sl) and self.time_left():
+            self.add_image(sl)
+        self.send_draft(sl)
+        self.persist()
+        return True
+
+    def menu_stats(self) -> None:
+        if not self.th:
+            return self.say("Нет доступа к Threads.")
+        lines = ["📊 Статистика Threads за 7 дней"]
+        until = int(time.time())
+        try:
+            st7 = self.th.account_stats(until - 7 * 86400, until)
+            prev = self.s.get("followers_prev")
+            f = st7.get("followers_count")
+            lines += [f"👀 Просмотры: {st7.get('views', 0)}", f"❤️ Лайки: {st7.get('likes', 0)}",
+                      f"💬 Ответы: {st7.get('replies', 0)}", f"🔁 Репосты: {st7.get('reposts', 0)}, цитаты: {st7.get('quotes', 0)}",
+                      f"👥 Подписчики: {f}" + (f" ({f - prev:+d} с прошлой проверки)" if isinstance(prev, int) and f is not None else "")]
+            if f is not None:
+                self.s["followers_prev"] = f
+        except Exception as e:
+            lines.append(f"⚠️ Общая статистика недоступна: {net.scrub(str(e))[:150]}")
+        try:
+            rows = []
+            for p in self.th.my_posts(10):
+                try:
+                    ps = self.th.post_stats(p["id"])
+                except Exception:
+                    continue
+                rows.append((ps.get("views", 0), ps.get("likes", 0), ps.get("replies", 0), p))
+            rows.sort(key=lambda r: r[0], reverse=True)
+            if rows:
+                lines.append("\n🏆 Лучшие из последних 10 постов:")
+                for v, l, r, p in rows[:3]:
+                    lines.append(f"{v} 👀 {l} ❤️ {r} 💬 · {(p.get('text') or '').strip()[:70]}… {p.get('permalink', '')}")
+        except Exception as e:
+            lines.append(f"⚠️ Посты недоступны: {net.scrub(str(e))[:150]}")
+        week = [d for k, d in self.s["days"].items() if since_minutes(k + "T12:00:00+02:00", now_kyiv()) <= 7 * 1440]
+        cnt = {}
+        for d in week:
+            for x in d["slots"]:
+                cnt[x["status"]] = cnt.get(x["status"], 0) + 1
+        lines.append(f"\n🤖 Бот за неделю: опубликовано {cnt.get('published', 0)}, пропущено {cnt.get('skipped', 0)}, "
+                     f"ждёт решения {cnt.get('sent', 0)}")
+        self.say("\n".join(lines))
+
+    def menu_comments(self) -> None:
+        if not self.th:
+            return self.say("Нет доступа к Threads.")
+        out = []
+        try:
+            for p in self.th.my_posts(5):
+                for r in self.th.replies(p["id"])[:5]:
+                    out.append((r.get("timestamp", ""), f"@{r.get('username', '?')}: {(r.get('text') or '').strip()[:150]}\n"
+                                f"   ↳ под постом «{(p.get('text') or '').strip()[:40]}…» {p.get('permalink', '')}"))
+        except Exception as e:
+            return self.say(f"⚠️ Не смог загрузить комментарии: {net.scrub(str(e))[:150]}")
+        if not out:
+            return self.say("💬 Под последними 5 постами комментариев пока нет.")
+        out.sort(reverse=True)
+        self.say("💬 Свежие комментарии:\n\n" + "\n\n".join(x for _, x in out[:10]) +
+                 "\n\nОтвечать пока лучше вручную в Threads. Скоро бот будет предлагать ответы кнопкой.")
+
+    def ensure_menu(self) -> None:
+        if not self.tg or not self.owner or self.s.get("menu_v") == MENU_VERSION:
+            return
+        try:
+            self.tg.set_commands(COMMANDS)
+        except net.NetError as e:
+            log("setMyCommands failed:", e)
+        self.say("Обновил бота: теперь всё в меню кнопками внизу 👇\n\n" + HELP, keyboard=MENU)
+        self.s["menu_v"] = MENU_VERSION
+
+    def listen(self, seconds: int) -> None:
+        """Keep answering Telegram for a few minutes with long polling, so buttons react within seconds."""
+        end = time.monotonic() + seconds
+        while time.monotonic() < end - 5:
+            n = self.handle_updates(wait=int(min(25, end - time.monotonic())))
+            if n:
+                self.now = now_kyiv()
+                self.publish_due()
+                self.draft_pending()
+                self.persist()
 
     # ---------- planning
     def roll_days(self) -> None:
@@ -380,7 +593,7 @@ class Bot:
                 continue
             made += 1
             sl["tries"] += 1
-            post = self.write(sl["kind"] == "sell", topic=sl.get("topic") or "")
+            post = self.write(sl["kind"] == "sell" or bool(sl.get("sell")), topic=sl.get("topic") or "")
             if post:
                 sl["draft"] = post
                 if self.should_illustrate(sl) and self.time_left():
@@ -410,7 +623,7 @@ class Bot:
     def should_illustrate(self, sl: dict) -> bool:
         if sl.get("want_image"):
             return True
-        if not self.images or not self.gm or sl["kind"] == "sell":
+        if not self.images or not self.gm or sl["kind"] == "sell" or sl.get("sell") or not self.s.get("auto_images", True):
             return False
         hype = sl.get("kind") == "hype"
         today = [x for x in self.slots() if (x.get("draft") or {}).get("image_auto") and (x.get("kind") == "hype") == hype]
@@ -504,9 +717,9 @@ class Bot:
         if gap < HYPE_SPACING_MIN or since_minutes(self.s.get("last_fail"), self.now) < 15:
             return
         ready = [x for x in self.slots() if x["status"] == "approved" and now_min >= x["at"]]
-        ready.sort(key=lambda x: (x["kind"] != "hype", x["at"]))  # hype is time-sensitive: first
+        ready.sort(key=lambda x: (x["kind"] not in ("hype", "now"), x["at"]))  # time-sensitive first
         for sl in ready:
-            if sl["kind"] == "hype" or gap >= SPACING_MIN:
+            if sl["kind"] in ("hype", "now") or gap >= SPACING_MIN:
                 self.publish(sl)
                 return  # one post per run
 
@@ -699,6 +912,7 @@ class Bot:
 
     # ---------- one run
     def tick(self) -> None:
+        self.ensure_menu()
         self.handle_updates()
         self.persist()
         self.roll_days()
@@ -734,6 +948,8 @@ def main(argv=None) -> int:
     try:
         if a.task == "tick":
             bot.tick()
+            bot.persist()
+            bot.listen(int(os.environ.get("LISTEN_SECONDS") or LISTEN_SECONDS))
         else:
             bot.handle_updates()
             if a.task == "selftest":

@@ -36,6 +36,22 @@ class Threads:
     def insights(self) -> dict:
         return self._get("me/threads_insights", metric="views")
 
+    def account_stats(self, since: int, until: int) -> dict:
+        """Totals for the period: views, likes, replies, reposts, quotes, followers_count."""
+        data = self._get("me/threads_insights", metric="views,likes,replies,reposts,quotes,followers_count",
+                         since=since, until=until).get("data", [])
+        return {m["name"]: metric_value(m) for m in data}
+
+    def post_stats(self, post_id: str) -> dict:
+        data = self._get(f"{post_id}/insights", metric="views,likes,replies,reposts,quotes").get("data", [])
+        return {m["name"]: metric_value(m) for m in data}
+
+
+def metric_value(m: dict) -> int:
+    if isinstance(m.get("total_value"), dict):
+        return int(m["total_value"].get("value") or 0)
+    return sum(int(v.get("value") or 0) for v in m.get("values", []))
+
     def publish_text(self, text: str, wait: float = 4.0) -> dict:
         container = self._post("me/threads", media_type="TEXT", text=text)["id"]
         time.sleep(wait)

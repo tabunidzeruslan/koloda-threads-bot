@@ -19,14 +19,26 @@ class Telegram:
     def get_me(self) -> dict:
         return self.call("getMe")
 
-    def updates(self, offset: int | None) -> list[dict]:
-        return self.call("getUpdates", offset=offset, timeout=0,
-                         allowed_updates=["message", "callback_query"]) or []
+    def updates(self, offset: int | None, wait: int = 0) -> list[dict]:
+        """wait > 0 = long polling: Telegram holds the request until a message arrives (instant replies)."""
+        params = {"offset": offset, "timeout": wait, "allowed_updates": ["message", "callback_query"]}
+        res = net.request("POST", f"{self.base}/getUpdates", json_body={k: v for k, v in params.items() if v is not None},
+                          timeout=wait + 15)
+        if not res.get("ok"):
+            raise net.NetError(200, res)
+        return res.get("result") or []
 
-    def send(self, chat_id: int, text: str, buttons: list[list[tuple[str, str]]] | None = None) -> int:
+    def set_commands(self, commands: list[tuple[str, str]]) -> None:
+        self.call("setMyCommands", commands=[{"command": c, "description": d} for c, d in commands])
+
+    def send(self, chat_id: int, text: str, buttons: list[list[tuple[str, str]]] | None = None,
+             keyboard: list[list[str]] | None = None) -> int:
         markup = None
         if buttons:
             markup = {"inline_keyboard": [[{"text": t, "callback_data": d} for t, d in row] for row in buttons]}
+        elif keyboard:
+            markup = {"keyboard": [[{"text": t} for t in row] for row in keyboard], "resize_keyboard": True,
+                      "is_persistent": True}
         res = self.call("sendMessage", chat_id=chat_id, text=text[:4000],
                         reply_markup=markup, disable_web_page_preview=True)
         return res["message_id"]
