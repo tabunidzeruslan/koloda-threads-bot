@@ -62,6 +62,7 @@ def make_bot(now, updates=None, s=None):
     b = Bot(s, tg=FakeTG(updates), gm=mock.Mock(model="m"), threads_secret="tok_secret_123",
             enc_key="k", now=now, rnd=random.Random(1))
     b.th = FakeThreads()
+    b.talk_hours = (0, 24)  # quiet hours are tested separately
     b.s.setdefault("day_trends", {"day": b.today_key(), "topics": []})  # no network in tests
     return b
 
@@ -388,6 +389,28 @@ class FreedomTests(unittest.TestCase):
              mock.patch("bot.writer.safety_check", return_value=(True, "")):
             b.publish(sl2)
         self.assertEqual(len(b.th.published), 1)
+
+
+class QuietTests(unittest.TestCase):
+    def test_quiet_hours_and_freedom_silence(self):
+        b = make_bot(kyiv(8))
+        b.talk_hours = (10, 18)
+        b.say("план")
+        self.assertEqual(b.tg.sent, [])
+        self.assertEqual(len(b.s["outbox"]), 1)
+        b.owner_turn(b.say, "відповідь на кнопку")
+        self.assertEqual(len(b.tg.sent), 1)  # answers to the owner go out at once
+        b.now = kyiv(10, 5)
+        b.flush_outbox()
+        self.assertEqual(len(b.tg.sent), 2)
+        b.s["autopilot"] = True
+        b.say("опубліковано")
+        self.assertEqual(len(b.tg.sent), 2)  # freedom: no trifles
+        b.say("сумнів", important=True)
+        self.assertEqual(len(b.tg.sent), 3)
+        b.now = kyiv(19)
+        b.say("сумнів увечері", important=True)
+        self.assertEqual(len(b.tg.sent), 3)
 
 
 class ImageTests(unittest.TestCase):

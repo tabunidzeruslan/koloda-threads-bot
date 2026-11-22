@@ -37,10 +37,10 @@ HELP = ("Усе є в меню кнопками внизу чату:\n"
         "Під чернеткою кнопки: Опублікувати / Обговорити / Інший текст / Пропустити. "
         "Щоб виправити текст, дайте відповідь (Reply) на чернетку своїм текстом.")
 # owner asked (22.11.2026) for a minimal menu; the other actions still work by plain words (статистика, хайп, чат…)
-MENU = [["📅 План на сьогодні"]]
-MENU_VERSION = 5
+MENU = [["План на сьогодні"]]
+MENU_VERSION = 6
 CHAT_IDLE_MINUTES = 30
-MENU_ACTIONS = {"📅 План на сьогодні": "menu_plan", "📅 План": "menu_plan", "📊 Статистика": "menu_stats", "✍️ Пост зараз": "menu_post",
+MENU_ACTIONS = {"План на сьогодні": "menu_plan", "📅 План на сьогодні": "menu_plan", "📅 План": "menu_plan", "📊 Статистика": "menu_stats", "✍️ Пост зараз": "menu_post",
                 "🔥 Хайп": "menu_hype", "🎨 Картинка": "menu_draw", "💬 Коментарі": "menu_comments",
                 "⚙️ Налаштування": "menu_settings", "❓ Допомога": "menu_help", "🧠 Чат з ботом": "menu_chat",
                 "🟢 Активувати": "menu_on", "⏸ Пауза": "menu_off"}
@@ -53,11 +53,12 @@ WORD_ACTIONS = {  # plain words, Russian or Ukrainian, without the emoji
     "свобода": "menu_freedom_on", "стоп": "menu_freedom_off", "стоп свободи": "menu_freedom_off", "активувати": "menu_on", "активировать": "menu_on", "старт": "menu_on", "пауза": "menu_off"}
 
 
-FREEDOM_ON, FREEDOM_OFF = "🚀 Повна свобода", "🛑 Стоп свободи"
+FREEDOM_ON, FREEDOM_OFF = "Повна свобода", "Стоп свободи"
 FREEDOM_MIN_SCORE = 7
 
 
-MENU_ACTIONS.update({FREEDOM_ON: "menu_freedom_on", FREEDOM_OFF: "menu_freedom_off"})
+MENU_ACTIONS.update({FREEDOM_ON: "menu_freedom_on", FREEDOM_OFF: "menu_freedom_off",
+                     "🚀 Повна свобода": "menu_freedom_on", "🛑 Стоп свободи": "menu_freedom_off"})
 
 
 def menu_word(text: str) -> str | None:
@@ -75,6 +76,7 @@ AWAIT_MINUTES = 20
 LISTEN_SECONDS = 60  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
 MAX_GEN_PER_RUN = 2
 IMAGE_EVERY_DAYS = 3  # at most one automatic picture in 3 days
+TALK_FROM, TALK_TO = 10, 18  # owner: the bot writes first only between 10:00 and 18:00 Kyiv
 MAX_AUTO_IMAGES_PER_DAY = 1  # owner: at most one picture a day for all posts together, only if really needed
 MAX_HYPE_IMAGES_PER_DAY = 1  # plus one for a trend post
 TREND_HOURS = (13, 17)  # extra checks if the morning scan found nothing safe
@@ -188,14 +190,46 @@ class Bot:
     def owner(self) -> int | None:
         return self.s.get("owner_chat_id")
 
-    def say(self, text: str, buttons=None, keyboard=None) -> int | None:
+    def in_talk_hours(self) -> bool:
+        lo, hi = getattr(self, "talk_hours", (TALK_FROM, TALK_TO))
+        return lo <= self.now.hour < hi
+
+    def say(self, text: str, buttons=None, keyboard=None, important: bool = False, force: bool = False) -> int | None:
+        """Answers to the owner's own presses go out at once. Messages the bot starts itself respect the owner's rules
+        (22.11.2026): only 10:00-18:00 Kyiv, and in freedom mode only important ones (a doubtful topic, a stop)."""
         self.summary.append(text)
+        if not force and not getattr(self, "_reactive", 0):
+            if self.s.get("autopilot") and not important:
+                log("тихо (свобода):", text[:100])
+                return None
+            if not self.in_talk_hours():
+                self.s.setdefault("outbox", []).append({"text": text[:4000], "buttons": buttons})
+                self.s["outbox"] = self.s["outbox"][-15:]
+                log("відкладено до 10:00:", text[:100])
+                return None
         if self.tg and self.owner:
             try:
                 return self.tg.send(self.owner, text, buttons, keyboard=keyboard)
             except net.NetError as e:
                 log("telegram send failed:", e)
         return None
+
+    def flush_outbox(self) -> None:
+        if not self.s.get("outbox") or not self.in_talk_hours() or not self.tg or not self.owner:
+            return
+        box, self.s["outbox"] = self.s["outbox"], []
+        for m in box:
+            try:
+                self.tg.send(self.owner, m["text"], m.get("buttons"))
+            except net.NetError as e:
+                log("outbox send failed:", e)
+
+    def owner_turn(self, fn, *a) -> None:
+        self._reactive = getattr(self, "_reactive", 0) + 1
+        try:
+            fn(*a)
+        finally:
+            self._reactive -= 1
 
     def today_key(self) -> str:
         return self.now.date().isoformat()
@@ -243,7 +277,7 @@ class Bot:
         except net.NetError as e:
             if since_minutes(tok.get("refresh_warned"), self.now) > 24 * 60:
                 tok["refresh_warned"] = self.now.isoformat()
-                self.say(f"⚠️ Не вдалося продовжити токен Threads: {e}. Якщо за кілька днів не мине, "
+                self.say(important=True, text=f"⚠️ Не вдалося продовжити токен Threads: {e}. Якщо за кілька днів не мине, "
                          "треба буде згенерувати новий і оновити секрет THREADS_TOKEN.")
             return
         new = res.get("access_token")
@@ -270,9 +304,9 @@ class Bot:
             self.s["tg_offset"] = u["update_id"] + 1
             try:
                 if "callback_query" in u:
-                    self.on_callback(u["callback_query"])
+                    self.owner_turn(self.on_callback, u["callback_query"])
                 elif "message" in u:
-                    self.on_message(u["message"])
+                    self.owner_turn(self.on_message, u["message"])
             except Exception as e:  # one bad update must not stop the run
                 log("update error:", e)
         if ups:
@@ -308,9 +342,9 @@ class Bot:
             seen.add(uid)
             try:
                 if "callback_query" in u:
-                    self.on_callback(u["callback_query"])
+                    self.owner_turn(self.on_callback, u["callback_query"])
                 elif "message" in u:
-                    self.on_message(u["message"])
+                    self.owner_turn(self.on_message, u["message"])
             except Exception as e:
                 log("update error:", e)
         self.s["relay_seen"] = sorted(seen)[-200:]
@@ -526,7 +560,7 @@ class Bot:
                  "4 пости за планом + тренд дня, відповідаю на прості коментарі.\n\n"
                  "Перед кожною публікацією перевіряю: правила, заборонені теми (війна, ТЦК, політика, релігія, трагедії), "
                  "що нікого не ображаю, і сьогоднішню повістку Києва. У дні масованих атак чи жалоби сам нічого не публікую.\n\n"
-                 "Про кожну публікацію напишу. Зупинити: «🛑 Стоп свободи»."
+                 "Про кожну публікацію напишу. Зупинити: «Стоп свободи»."
                  + (f"\n\nЧернетки, що чекали на вас ({n}), теж вийдуть у свій час." if n else ""), keyboard=self.menu_kb())
 
     def menu_freedom_off(self) -> None:
@@ -537,7 +571,7 @@ class Bot:
                 x["status"], x["auto"] = "sent", False
                 n += 1
         self.say("🛑 Свободу зупинено. Далі публікую тільки після вашого «✅ Опублікувати»."
-                 + (f" {n} заплановані мною пости знову чекають вашого рішення в «📅 План на сьогодні»." if n else ""),
+                 + (f" {n} заплановані мною пости знову чекають вашого рішення в «План на сьогодні»." if n else ""),
                  keyboard=self.menu_kb())
 
     def menu_off(self) -> None:
@@ -967,7 +1001,7 @@ class Bot:
             self.tg.set_commands(COMMANDS)
         except net.NetError as e:
             log("setMyCommands failed:", e)
-        self.say("Оновив бота: тепер усе українською і в меню кнопками внизу 👇\n\n" + HELP, keyboard=self.menu_kb())
+        self.say("Оновив меню 👇", keyboard=self.menu_kb(), force=True)
         self.s["menu_v"] = MENU_VERSION
 
     def listen(self, seconds: int) -> None:
@@ -1106,7 +1140,10 @@ class Bot:
             self.send_reply(key, note=head)
             return
         body = f"{head}\n\nПропоную відповісти:\n{dr['answer']}" if dr["answer"] else f"{head}\n\nБот радить не відповідати."
-        item["msg_id"] = self.say(body + "\n\nСвоя відповідь: дайте відповідь (Reply) на це повідомлення.", buttons=[
+        if self.s.get("autopilot") and dr["type"] not in ("complaint",) and not dr["lead"]:
+            item["status"] = "skipped"  # freedom: only complaints and likely buyers are worth the owner's attention
+            return
+        item["msg_id"] = self.say(important=True, text=body + "\n\nСвоя відповідь: дайте відповідь (Reply) на це повідомлення.", buttons=[
             [("✅ Відповісти так", f"ra|{key}"), ("🔁 Інша відповідь", f"rr|{key}")],
             [("⏭ Не відповідати", f"rs|{key}")]])
 
@@ -1124,7 +1161,7 @@ class Bot:
     def morning_brief(self) -> None:
         """Once a day after 8:00: what is planned today, after the drafts are ready."""
         key = self.today_key()
-        if self.s.get("brief_day") == key or self.now.hour < BRIEF_HOUR or not self.s["schedule_on"]:
+        if self.s.get("brief_day") == key or self.now.hour < BRIEF_HOUR or not self.s["schedule_on"] or self.s.get("autopilot"):
             return
         sl = self.slots()
         if not sl or any(x["status"] == "new" for x in sl):
@@ -1340,7 +1377,12 @@ class Bot:
         if d.get("image_error") and not img:
             head += f"\n(картинка не вийшла: {d['image_error'][:120]})"
         msg_id = None
-        if img and self.tg and self.owner:
+        important = bool(note and note.startswith("🛡"))
+        allowed = getattr(self, "_reactive", 0) or ((important or not self.s.get("autopilot")) and self.in_talk_hours())
+        if auto and not getattr(self, "_reactive", 0):
+            sl["msg_id"], sl["status"] = None, "approved"  # freedom: plan silently, the owner sees it in «План»
+            return
+        if img and self.tg and self.owner and allowed:
             photo = getattr(self, "_image_bytes", None) or img.get("file_id")
             self._image_bytes = None
             try:
@@ -1350,7 +1392,7 @@ class Bot:
                 log("send_photo failed:", e)
                 d.pop("image", None)
         if msg_id is None:
-            msg_id = self.say(f"{head}\n\n{d['text']}", buttons)
+            msg_id = self.say(f"{head}\n\n{d['text']}", buttons, important=important)
         sl["msg_id"] = msg_id
         sl["status"] = "approved" if auto else "sent"
 
@@ -1394,7 +1436,11 @@ class Bot:
             ok, why = self.safe_to_autopost(sl)
             if not ok:
                 sl["status"], sl["auto"], sl["owner_only"] = "sent", False, True
-                self.say(f"🛡 Не опублікував сам пост на {hhmm(sl['at'])}: {why}. Вирішіть самі:")
+                if not self.in_talk_hours():
+                    sl["status"] = "skipped"  # nobody to ask now: a doubtful post is better not posted
+                    self.s.setdefault("outbox", []).append({"text": f"🛡 Вчора/сьогодні не опублікував сам пост на {hhmm(sl['at'])}: {why}\n\n{sl['draft']['text']}"})
+                    return
+                self.say(f"🛡 Сумнів: не публікую сам пост на {hhmm(sl['at'])}: {why}. Вирішіть, будь ласка:", important=True)
                 self.send_draft(sl, note="🛡 Чекає вашого рішення")
                 return
         text = sl["draft"]["text"]
@@ -1427,7 +1473,7 @@ class Bot:
             if self.s["fail_streak"] >= 2:
                 self.s["paused_reason"] = "дві помилки публікації поспіль"
                 msg += "\nДві помилки поспіль, ставлю бота на паузу. Увімкнути знову: 🟢 Активувати"
-            self.say(msg)
+            self.say(msg, important=self.s["fail_streak"] >= 2)
             return
         sl["status"], sl["post"] = "published", res
         self.s["fail_streak"] = 0
@@ -1608,6 +1654,7 @@ class Bot:
 
     def tick(self) -> None:
         self.ensure_menu()
+        self.flush_outbox()
         self.upgrade_plan()
         self.handle_updates()
         self.persist()
