@@ -150,7 +150,7 @@ def rules() -> dict:
 
 
 def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[str], background: str = "",
-                 topic: str = "") -> str:
+                 topic: str = "", role: str = "") -> str:
     biz, facts, style = load("business.json"), load("facts.json"), load("style.json")
     voice = {k: v for k, v in load("voice.json").items() if k != "note"}
     fmt = voice["formats"][(today.toordinal() + len(recent)) % len(voice["formats"])]
@@ -185,6 +185,8 @@ def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[st
         lines.append("ЛОГІКА (порушення = пост у смітник): " + json.dumps(r.get("logic", []), ensure_ascii=False))
     if background:
         lines.append("Контекст дня (можна використати, не обовʼязково): " + background)
+    if role:
+        lines.append("РОЛЬ ЦЬОГО ПОСТА В ПЛАНІ ДНЯ (усі варіанти мають їй відповідати): " + role)
     if topic:
         lines.append("ГОЛОВНА ТЕМА всіх 4 варіантів (інфопривід, реакція на хайп): " + topic +
                      "\nЗроби дотепну реакцію з ЛОГІЧНИМ містком до дров, тепла, дому чи чесного обʼєму: спільне почуття, "
@@ -204,9 +206,9 @@ def build_prompt(*, today: date, rubrics: list[str], sell: bool, recent: list[st
 
 
 def generate_variants(gm: Gemini, *, today: date, rubrics: list[str], sell: bool, recent: list[str],
-                      background: str = "", topic: str = "", images: list | None = None) -> list[dict]:
+                      background: str = "", topic: str = "", images: list | None = None, role: str = "") -> list[dict]:
     raw = gm.generate(build_prompt(today=today, rubrics=rubrics, sell=sell, recent=recent, background=background,
-                                   topic=topic), system=SYSTEM, json_mode=True, images=images)
+                                   topic=topic, role=role), system=SYSTEM, json_mode=True, images=images)
     data = parse_json(raw)
     out = []
     for v in data.get("variants", []) if isinstance(data, dict) else []:
@@ -401,12 +403,15 @@ def factcheck(gm: Gemini, text: str, topic: str = "") -> tuple[str, str, str | N
 
 def write_post(gm: Gemini, *, today: date, sell: bool, recent: list[str], last_rubrics: list[str],
                rnd: random.Random | None = None, log=print, background: str = "", topic: str = "",
-               images: list | None = None) -> dict | None:
+               images: list | None = None, role: str = "", prefer: list[str] | None = None) -> dict | None:
     rnd = rnd or random.Random()
     examples = load("style.json")["examples"]
-    rubrics = [] if sell or topic else pick_rubrics(load("rubrics.json"), today, last_rubrics, 4, rnd)
+    pool = load("rubrics.json")
+    if prefer:
+        pool = [r for r in pool if r["name"] in prefer] or pool
+    rubrics = [] if sell or topic else pick_rubrics(pool, today, last_rubrics, 4, rnd)
     variants = generate_variants(gm, today=today, rubrics=rubrics, sell=sell, recent=recent, background=background,
-                                 topic=topic, images=images)
+                                 topic=topic, images=images, role=role)
     passed = []
     for v in variants:
         why = check(v["text"], sell=sell, today=today, recent=recent, examples=examples)
@@ -572,12 +577,14 @@ def image_prompt(gm: Gemini, post_text: str, topic: str = "", hint: str = "") ->
 
 IMAGE_JUDGE = """Ти арт-директор Threads-акаунта. Більшість постів у Threads краще працюють БЕЗ картинки: текст сам по собі.
 Картинка потрібна лише коли вона підсилює жарт або ідею: є яскрава візуальна метафора, абсурдна сцена,
-порівняння «до/після», предмет, який смішно намалювати. Для питань, суперечок, зізнань і коротких думок картинка не потрібна.
+порівняння «до/після», предмет, який смішно намалювати. Для питань, суперечок, зізнань, порад і коротких думок картинка не потрібна.
+Власник дозволив МАКСИМУМ ОДНУ картинку на день на всі пости, і тільки якщо дуже треба. Тому кажи true лише тоді,
+коли без картинки пост явно слабший (мем, візуальний жарт). Якщо сумніваєшся, false.
 Відповідь тільки JSON: {"image": true/false, "why": "коротко"}"""
 
 
 def needs_image(gm: Gemini, text: str, trend: bool = False) -> tuple[bool, str]:
-    hint = ("Це пост на гарячу тему дня: тут картинка з Івановичем, що реагує на тему, часто підсилює впізнаваність.\n"
+    hint = ("Це пост на гарячу тему дня: картинка з Івановичем доречна тільки якщо жарт без неї не працює.\n"
             if trend else "")
     data = parse_json(gm.generate(f"{hint}Пост:\n{text}", system=IMAGE_JUDGE, json_mode=True, temperature=0.2))
     return bool(data.get("image")), str(data.get("why", ""))[:150]

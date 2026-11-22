@@ -58,6 +58,7 @@ GOOD = "Дуб чи граб? Знаю родини, де це питання г
 def make_bot(now, updates=None, s=None):
     s = s or st.load("/nonexistent")
     s["owner_chat_id"] = 1
+    s.setdefault("plan_v", 2)
     b = Bot(s, tg=FakeTG(updates), gm=mock.Mock(model="m"), threads_secret="tok_secret_123",
             enc_key="k", now=now, rnd=random.Random(1))
     b.th = FakeThreads()
@@ -103,8 +104,8 @@ class MiscTests(unittest.TestCase):
     def test_slots(self):
         for seed in range(50):
             sl = make_slots(random.Random(seed))
-            self.assertEqual(len(sl), 3)
-            self.assertTrue(all(b - a >= 120 for a, b in zip(sl, sl[1:])))
+            self.assertEqual(len(sl), 4)
+            self.assertTrue(all(b - a >= 110 for a, b in zip(sl, sl[1:])))
 
     def test_rank_models(self):
         names = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-flash-image",
@@ -146,8 +147,9 @@ class FlowTests(unittest.TestCase):
                                                                  "fact": "ok", "fact_note": None}):
             b.tick()
         slots = b.slots()
-        self.assertEqual(len(slots), 3)
-        self.assertEqual([x["status"] for x in slots], ["sent", "sent", "new"])  # 2 per run
+        self.assertEqual(len(slots), 4)
+        self.assertEqual([x["status"] for x in slots], ["sent", "sent", "new", "new"])  # 2 per run
+        self.assertTrue(slots[0]["role"] and slots[-1]["kind"] == "sell")
         self.assertEqual(b.th.published, [])  # nothing without approval
         sl = slots[0]
         cb = {"update_id": 5, "callback_query": {"id": "c", "from": {"id": 1}, "data": f"ok|{sl['id']}|{sl['v']}",
@@ -294,6 +296,30 @@ class TrendTests(unittest.TestCase):
         b.s["posts"].append({"text": "old", "at": kyiv(12, 30).isoformat()})  # 37 min ago: ok for hype
         b.publish_due()
         self.assertEqual(b.th.published, [GOOD])
+
+
+class PlanTests(unittest.TestCase):
+    def test_upgrade_turns_on_and_rebuilds_future(self):
+        s = st.load("/nonexistent")
+        b = make_bot(kyiv(3), s=s)
+        b.s["plan_v"] = 0
+        b.s["days"]["2026-11-23"] = {"slots": [{"id": "x", "at": 640, "kind": "hook", "status": "new"}]}
+        b.upgrade_plan()
+        self.assertTrue(b.s["schedule_on"])
+        self.assertNotIn("2026-11-23", b.s["days"])
+        self.assertIn("Нова стратегія з 22.11", b.tg.sent[-1][0])
+
+    def test_plan_view_and_approve_all(self):
+        b = make_bot(kyiv(7))
+        b.s["schedule_on"] = True
+        with mock.patch("bot.writer.write_post", return_value={"text": GOOD, "rubric": "x", "score": 8, "fact": "ok", "fact_note": None}):
+            b.tick()
+        b.menu_plan()
+        self.assertIn("План на сьогодні", b.tg.sent[-1][0])
+        b.on_menu("okall")
+        self.assertEqual([x["status"] for x in b.slots()][:2], ["approved", "approved"])
+        b.on_menu(f"show|{b.slots()[0]['id']}")
+        self.assertEqual(b.slots()[0]["status"], "approved")
 
 
 class ImageTests(unittest.TestCase):

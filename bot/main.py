@@ -65,10 +65,11 @@ COMMANDS = [("menu", "Показати меню"), ("status", "План на с�
 AWAIT_MINUTES = 20
 LISTEN_SECONDS = 60  # after a scheduled run the bot keeps listening to Telegram, so buttons answer within seconds
 MAX_GEN_PER_RUN = 2
-MAX_AUTO_IMAGES_PER_DAY = 1  # the bot decides itself which post deserves a picture
+MAX_AUTO_IMAGES_PER_DAY = 1  # owner: at most one picture a day for all posts together, only if really needed
 MAX_HYPE_IMAGES_PER_DAY = 1  # plus one for a trend post
 TREND_HOURS = (9, 13, 17)   # Kyiv hours when the bot looks at Google Trends Ukraine
-MAX_HYPE_PER_DAY = 2
+MAX_HYPE_PER_DAY = 1  # 4 planned posts + 1 trend post = up to 5 a day
+PLAN_VERSION = 2
 HYPE_SPACING_MIN = 30
 TIME_BUDGET = 6 * 60
 
@@ -117,6 +118,28 @@ def secret_shapes() -> list[str]:
     shape("CF_API_TOKEN", lambda v: 35 <= len(v) <= 60 and bool(_re.fullmatch(r"[A-Za-z0-9_\-]+", v)) and not _re.fullmatch(r"[0-9a-f]{32}", v),
           "не схоже на API Token Cloudflare (зазвичай 40 символів; не плутати з Account ID і Global API Key)")
     return out
+
+
+DATA = Path(__file__).resolve().parent.parent / "data"
+
+
+def daily_plan() -> list[dict]:
+    try:
+        return json.loads((DATA / "daily_plan.json").read_text(encoding="utf-8")).get("slots", [])
+    except (OSError, ValueError):
+        return []
+
+
+STRATEGY_MSG = ("📋 Нова стратегія з {date}:\n\n"
+                "Щодня 4 пости за планом + 1 на гарячу тему дня (до 5):\n"
+                "• 08:30–09:30 Ранкова користь: порада, яку зберігають (обʼєм, сушка, які дрова куди)\n"
+                "• 11:30–13:00 Спір дня: гостра думка або вибір А/Б, щоб писали в коментарях\n"
+                "• 15:00–16:30 Побут і гумор: київська або дачна ситуація, мем\n"
+                "• 19:00–20:30 Вечірній продаж: одна причина замовити зараз + контакт\n"
+                "• 🔥 Хайп: якщо Київ про щось гуде, реакція з логічним містком до тепла\n\n"
+                "Картинка максимум одна на день і тільки якщо дуже треба. Продаючий завжди без картинки.\n\n"
+                "Чернетки на день готую з 6:00, о 8:00 надішлю план. Ваша дія: «📅 План» → «✅ Схвалити всі». "
+                "Якщо щось не так: натисніть пост → «💬 Обговорити» → напишіть що змінити.")
 
 
 def log(*a):
@@ -459,7 +482,7 @@ class Bot:
 
     def menu_on(self) -> None:
         self.s["schedule_on"], self.s["paused_reason"], self.s["fail_streak"] = True, None, 0
-        self.say("🟢 Активовано: щодня 3 чернетки, публікація тільки після вашої кнопки"
+        self.say("🟢 Активовано: щодня 4 пости за планом + 1 на гарячу тему, публікація тільки після вашої кнопки"
                  + (" (або сама, бо увімкнено автопілот)." if self.s.get("autopilot") else "."), keyboard=self.menu_kb())
 
     def menu_off(self) -> None:
@@ -468,10 +491,48 @@ class Bot:
 
     def menu_plan(self) -> None:
         on = self.s["schedule_on"] and not self.s.get("paused_reason")
-        self.say(self.status_text(), buttons=[
-            [("⏸ Пауза", "m|off") if on else ("🟢 Активувати", "m|on")],
-            [("📆 Завтра", "m|plan|1"), ("📆 Післязавтра", "m|plan|2")],
-            [("🤫 Тиша сьогодні", "m|quiet"), ("✍️ Пост зараз", "m|postmenu")]])
+        sl = sorted(self.slots(), key=lambda x: x["at"])
+        lines = [f"📅 План на сьогодні ({self.now.strftime('%d.%m')})"]
+        if not on:
+            lines.append("Бот на паузі: натисніть 🟢 Активувати." if self.s.get("paused_reason") or not self.s["schedule_on"] else "")
+        if self.quiet():
+            lines.append("🤫 Сьогодні тиша.")
+        if not sl:
+            lines.append("Постів на сьогодні ще немає. План складається о 6:00 за Києвом, чернетки приходять до 8:00.")
+        icons = {"approved": "✅", "published": "🟢", "sent": "🕓", "new": "✍️", "skipped": "⏭",
+                 "expired": "⌛", "failed": "⚠️", "publishing": "⏳"}
+        rows = []
+        for x in sl:
+            d = x.get("draft") or {}
+            kind = {"sell": "💰 продаж", "hype": "🔥 хайп", "now": "✍️ на запит", "sell-now": "💰 на запит"}.get(
+                x["kind"], x.get("name") or "пост")
+            first = (d.get("text") or "чернетка ще готується").split("\n")[0][:80]
+            pic = " 🖼" if d.get("image") else ""
+            lines.append(f"\n{icons.get(x['status'], '•')} {hhmm(x['at'])} · {kind}{pic} · {STATUS_UA.get(x['status'], x['status'])}\n   {first}")
+            if d and x["status"] in ("sent", "approved"):
+                rows.append([(f"👁 {hhmm(x['at'])} показати / змінити", f"m|show|{x['id']}")])
+        waiting = [x for x in sl if x["status"] == "sent"]
+        if waiting:
+            lines.append(f"\nЧекають вашого рішення: {len(waiting)}. Тисніть пост, щоб подивитись і обговорити, або схваліть усі одразу.")
+            rows.insert(0, [(f"✅ Схвалити всі ({len(waiting)})", "m|okall")])
+        if any(x["status"] == "new" for x in sl):
+            rows.append([("✍️ Підготувати чернетки зараз", "m|makeall")])
+        rows += [[("⏸ Пауза", "m|off") if on else ("🟢 Активувати", "m|on"), ("📆 Завтра", "m|plan|1")],
+                 [("🤫 Тиша сьогодні", "m|quiet"), ("✍️ Пост зараз", "m|postmenu")]]
+        self.say("\n".join(x for x in lines if x), buttons=rows)
+
+    def approve_all(self) -> None:
+        n = 0
+        for x in self.slots():
+            if x["status"] == "sent" and x.get("draft"):
+                x["status"] = "approved"
+                n += 1
+                if x.get("msg_id") and self.tg and self.owner:
+                    try:
+                        self.tg.edit(self.owner, x["msg_id"], f"✅ Схвалено, вийде близько {hhmm(x['at'])}\n\n{x['draft']['text']}")
+                    except Exception as e:
+                        log("edit after approve-all failed:", e)
+        self.say(f"✅ Схвалив {n}. Вийдуть у свій час, нічого більше робити не треба." if n else "Немає чернеток, що чекають рішення.")
 
     def menu_post(self) -> None:
         self.say("Яку чернетку зробити просто зараз? Публікація однаково тільки після вашої кнопки.", buttons=[
@@ -533,13 +594,27 @@ class Bot:
             self.say("🔔 Тишу скасовано, працюю як завжди.")
         elif what == "autoimg":
             self.s["auto_images"] = not self.s.get("auto_images", True)
-            self.say("🖼 Авто-картинки " + ("увімкнені: бот сам вирішує, де потрібна картинка (до 1 на день + до хайпу)."
+            self.say("🖼 Авто-картинки " + ("увімкнені: бот сам вирішує, де потрібна картинка (максимум 1 на день і тільки якщо дуже треба)."
                                            if self.s["auto_images"] else "вимкнені. Картинку можна додати кнопкою під чернеткою."))
         elif what == "autopilot":
             self.s["autopilot"] = not self.s.get("autopilot")
             self.say("🤖 Автопілот увімкнено: добрі чернетки (оцінка 8+, факти перевірені) виходять самі у свій час. "
                      "Під кожною буде «Не публікувати» і «Обговорити»." if self.s["autopilot"] else
                      "🤖 Автопілот вимкнено: публікую тільки після вашої кнопки.")
+        elif what == "okall":
+            self.approve_all()
+        elif what == "makeall":
+            self.say("✍️ Готую чернетки на сьогодні, надішлю по одній.")
+            self.draft_pending(force=True)
+        elif what.startswith("show|"):
+            x = self.find_slot(what.partition("|")[2])
+            if x and x.get("draft") and x["status"] in ("sent", "approved"):
+                was = x["status"]
+                self.send_draft(x, note=(f"✅ Уже схвалено, вийде о {hhmm(x['at'])}. Можна обговорити або скасувати." if was == "approved" else None))
+                if was == "approved":
+                    x["status"] = "approved"
+            else:
+                self.say("Цей пост уже неактуальний.")
         elif what.startswith("plan|"):
             self.plan_ahead(int(what.partition("|")[2] or 1))
         elif what == "postmenu":
@@ -875,14 +950,17 @@ class Bot:
         today = key == self.today_key()
         slots = []
         times = make_slots(self.rnd)
+        plan = daily_plan()
         for i, at in enumerate(times):
             if today and at < minutes_of(self.now) - 30:
                 continue  # window already passed (bot switched on mid-day)
             self.s["planned_total"] += 1
-            kind = "sell" if i == len(times) - 1 else "hook"  # evening post sells: one per day, with wit
+            p = plan[i] if i < len(plan) else {}
+            kind = p.get("kind") or ("sell" if i == len(times) - 1 else "hook")  # evening post sells, with wit
             slots.append({"id": f"{key[5:7]}{key[8:]}-{i}", "at": at, "kind": kind, "status": "new",
                           "tries": 0, "rejects": 0, "v": 0, "draft": None, "msg_id": None,
-                          "want_image": False, "day": key})
+                          "want_image": False, "day": key, "name": p.get("name", ""), "role": p.get("role", ""),
+                          "prefer": p.get("rubrics", []), "image_rule": p.get("image", "")})
         self.s["days"][key] = {"slots": slots}
         try:
             self.s["weather"] = trends.fetch_weather()
@@ -990,13 +1068,9 @@ class Bot:
         if not sl or any(x["status"] == "new" for x in sl):
             return
         self.s["brief_day"] = key
-        lines = ["☀️ Доброго ранку! План на сьогодні:"]
-        for x in sl:
-            text = ((x.get("draft") or {}).get("text") or "").split("\n")[0][:70]
-            lines.append(f"{hhmm(x['at'])} {'💰' if x['kind'] == 'sell' else '📝'} {STATUS_UA.get(x['status'], x['status'])}: {text}")
-        lines.append("\nЧернетки вище, схвалюйте або тисніть «Обговорити». " +
-                     ("Автопілот увімкнено: схвалені ботом вийдуть самі." if self.s.get("autopilot") else ""))
-        self.say("\n".join(lines))
+        self.say("☀️ Доброго ранку! Ось що сьогодні виходить. Усе гаразд? Тисніть «✅ Схвалити всі»."
+                 + (" Автопілот увімкнено: добрі пости вийдуть самі." if self.s.get("autopilot") else ""))
+        self.menu_plan()
 
     def time_left(self) -> bool:
         return time.monotonic() - self.started < TIME_BUDGET
@@ -1024,7 +1098,7 @@ class Bot:
                 continue
             made += 1
             sl["tries"] += 1
-            post = self.write(sl["kind"] == "sell" or bool(sl.get("sell")), topic=sl.get("topic") or "")
+            post = self.write(sl["kind"] == "sell" or bool(sl.get("sell")), topic=sl.get("topic") or "", sl=sl)
             if post:
                 sl["draft"] = post
                 if self.should_illustrate(sl) and self.time_left():
@@ -1038,11 +1112,12 @@ class Bot:
     def background(self) -> str:
         return " ".join(x for x in (trends.weather_line(self.s.get("weather")), trends.calendar_note(self.now.date())) if x)
 
-    def write(self, sell: bool, topic: str = "", images: list | None = None) -> dict | None:
+    def write(self, sell: bool, topic: str = "", images: list | None = None, sl: dict | None = None) -> dict | None:
         try:
             post = writer.write_post(self.gm, today=self.now.date(), sell=sell, recent=self.recent_texts(),
                                      last_rubrics=self.last_rubrics(), rnd=self.rnd, log=log,
-                                     background=self.background(), topic=topic, images=images)
+                                     background=self.background(), topic=topic, images=images,
+                                     role=(sl or {}).get("role", ""), prefer=(sl or {}).get("prefer"))
         except Exception as e:
             log("writer failed:", e)
             return None
@@ -1056,9 +1131,10 @@ class Bot:
             return True
         if not self.images or not self.gm or sl["kind"] == "sell" or sl.get("sell") or not self.s.get("auto_images", True):
             return False
-        hype = sl.get("kind") == "hype"
-        today = [x for x in self.slots() if (x.get("draft") or {}).get("image_auto") and (x.get("kind") == "hype") == hype]
-        if len(today) >= (MAX_HYPE_IMAGES_PER_DAY if hype else MAX_AUTO_IMAGES_PER_DAY):
+        if "без картинки" in (sl.get("image_rule") or ""):
+            return False
+        day = self.s["days"].get(sl.get("day") or self.today_key(), {}).get("slots", [])
+        if sum(1 for x in day if (x.get("draft") or {}).get("image")) >= MAX_AUTO_IMAGES_PER_DAY:
             return False
         try:
             yes, why = writer.needs_image(self.gm, sl["draft"]["text"], trend=sl.get("kind") == "hype")
@@ -1373,8 +1449,24 @@ class Bot:
                 self.say(f"Пробний {i + 1}/{n}: не пройшов фільтри й оцінку, пропускаю.")
 
     # ---------- one run
+    def upgrade_plan(self) -> None:
+        """Owner asked on 22.11.2026: start posting from the next morning, 4-5 posts a day."""
+        if self.s.get("plan_v", 0) >= PLAN_VERSION:
+            return
+        self.s["plan_v"] = PLAN_VERSION
+        self.s["schedule_on"], self.s["paused_reason"] = True, None
+        for day in [d for d in self.s["days"] if d >= self.today_key()]:  # rebuild old 3-post plans
+            if not any(x["status"] in ("published", "publishing") for x in self.s["days"][day]["slots"]):
+                for x in self.s["days"][day]["slots"]:
+                    if x.get("msg_id") and x["status"] in ("sent", "approved") and self.tg and self.owner:
+                        self.tg.edit(self.owner, x["msg_id"], "♻️ Старий план, замінено новим.\n\n" + (x.get("draft") or {}).get("text", ""))
+                del self.s["days"][day]
+        tomorrow = self.now.date() if self.now.hour < 6 else self.now.date() + __import__("datetime").timedelta(days=1)
+        self.say(STRATEGY_MSG.format(date=tomorrow.strftime("%d.%m")), keyboard=self.menu_kb())
+
     def tick(self) -> None:
         self.ensure_menu()
+        self.upgrade_plan()
         self.handle_updates()
         self.persist()
         self.roll_days()

@@ -10,9 +10,9 @@ try:
 except Exception:  # very old tzdata
     TZ = ZoneInfo("Europe/Kiev")
 
-# (start, end) in minutes from midnight; the strongest slot is in the evening (17-20 peak)
-WINDOWS = [(9 * 60, 11 * 60), (13 * 60, 15 * 60 + 30), (18 * 60, 20 * 60 + 30)]
-MIN_GAP = 120
+# (start, end) in minutes from midnight, from data/daily_plan.json; the selling slot is in the evening (17-20 peak)
+WINDOWS = [(8 * 60 + 30, 9 * 60 + 30), (11 * 60 + 30, 13 * 60), (15 * 60, 16 * 60 + 30), (19 * 60, 20 * 60 + 30)]
+MIN_GAP = 110
 LAST_PUBLISH_MIN = 22 * 60 + 45  # do not publish after 22:45
 SPACING_MIN = 75                 # at least 75 minutes between our posts
 
