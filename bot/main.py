@@ -787,7 +787,10 @@ class Bot:
                     continue
                 d = fsl["draft"]
                 if t == "edit_text" and c.get("text"):
-                    d.update({"text": str(c["text"]).strip()[:500], "score": d.get("score"), "fact": d.get("fact")})
+                    new = str(c["text"]).strip()[:500]
+                    if self.gm:
+                        new = writer.proofread(self.gm, new)[0]
+                    d.update({"text": new, "score": d.get("score"), "fact": d.get("fact")})
                     touched = True
                 elif t == "redraw":
                     fsl["want_image"], fsl["image_hint"] = True, str(c.get("hint") or "")[:400]

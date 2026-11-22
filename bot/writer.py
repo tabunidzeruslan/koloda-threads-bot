@@ -228,7 +228,9 @@ def generate_variants(gm: Gemini, *, today: date, rubrics: list[str], sell: bool
 
 EDITOR = """Ти суворий редактор постів у Threads. Оціни кожен пост від 1 до 10 за критеріями:
 гачок у першому рядку; зухвалість і сарказм без образ людей (образи, мат, жарти про війну чи обстріли = оцінка 1); хочеться відповісти або посперечатися; звучить як людина, а не маркетолог чи ШІ;
-логічний: є одна ясна думка, зв'язок між темою і дровами має сенс, а не просто стоїть поруч (нелогічний = не вище 4); немає вигаданих фактів, цифр, випадків; не повторює недавні пости; короткий; відповідає сезону; без помилок української мови.
+логічний: є одна ясна думка, зв'язок між темою і дровами має сенс, а не просто стоїть поруч (нелогічний = не вище 4); немає вигаданих фактів, цифр, випадків; не повторює недавні пости; короткий; відповідає сезону.
+МОВА: будь-яка граматична помилка (відмінки, узгодження, «швидше, ніж каву»), русизм, калька чи незграбний зворот, який носій так не скаже = не вище 5.
+Кожне речення має бути зрозумілим і логічним саме по собі; дивна або натягнута порівняльна конструкція = не вище 5.
 Відповідь тільки JSON: {"scores": [{"i": 0, "score": 8, "why": "коротко"}]}"""
 
 
@@ -380,6 +382,25 @@ def reply_draft(gm: Gemini, *, post: str, comment: str, author: str) -> dict:
             "safe": bool(data.get("safe")), "lead": bool(data.get("lead"))}
 
 
+PROOFREAD = """Ти коректор і літредактор української мови для Threads. Перечитай пост як носій мови з Києва.
+Виправ: граматику (відмінки, узгодження, порівняння: «швидше, ніж закипає кава», а не «швидше, ніж каву»), правопис,
+пунктуацію, русизми і кальки («приймати участь», «на протязі», «вірно» замість «правильно»), неприродні або незрозумілі звороти,
+речення, в яких губиться логіка (переформулюй так, щоб думка була ясна).
+Не міняй зміст, жарт, тон, довжину і факти. Не додавай нічого нового. Якщо все добре, поверни текст без змін.
+Відповідь тільки JSON: {"text": "виправлений текст", "fixes": ["що виправив"]}"""
+
+
+def proofread(gm: Gemini, text: str) -> tuple[str, list[str]]:
+    try:
+        data = parse_json(gm.generate(text, system=PROOFREAD, json_mode=True, temperature=0.1))
+    except Exception:
+        return text, []
+    new = (data.get("text") or "").strip() if isinstance(data, dict) else ""
+    if not new or len(new) > len(text) * 1.4 + 40 or len(new) < len(text) * 0.6:
+        return text, []
+    return new, [str(x) for x in (data.get("fixes") or [])][:5]
+
+
 def factcheck(gm: Gemini, text: str, topic: str = "") -> tuple[str, str, str | None]:
     """Returns (status, text, note). status: ok | fixed | bad | unchecked."""
     current = text
@@ -442,6 +463,10 @@ def write_post(gm: Gemini, *, today: date, sell: bool, recent: list[str], last_r
             continue
         if text != v["text"] and check(text, sell=sell, today=today, recent=recent, examples=examples):
             continue
+        fixed, fixes = proofread(gm, text)
+        if fixed != text and not check(fixed, sell=sell, today=today, recent=recent, examples=examples):
+            log("  коректор:", "; ".join(fixes))
+            text = fixed
         return {"text": text, "rubric": v["rubric"], "score": sc, "why": why, "fact": status, "fact_note": note,
                 "tag": v.get("tag", "")}
     return None
