@@ -598,7 +598,12 @@ class Bot:
             out.append("❌ Нет секрета GEMINI_API_KEY")
         if self.images:
             def img_test():
-                res = self.images.generate("A minimalist black ink line drawing of a single firewood log on a pure white background.", log=log)
+                il = writer.load("illustration.json")
+                prompt = ("Kolodko stands seriously next to a neat stacked cubic meter of firewood and measures it with a "
+                          "tiny orange tape measure.\n" + il["character"] + "\n" + il["style"] + "\n" + il["text_rule"])
+                res = self.images.generate(prompt, log=log)
+                if self.tg and self.owner:
+                    self.tg.send_photo(self.owner, res["bytes"], f"Пробная картинка: Колодько ({res['provider']})")
                 return f"{res['provider']}, {len(res['bytes']) // 1024} КБ"
             out.append(f"ℹ️ Генераторы картинок: {', '.join(self.images.providers())}")
             chk("Картинка", img_test)
